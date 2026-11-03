@@ -16,8 +16,6 @@
       </div>
 
       <div class="manage-header-right">
-        <el-button size="small" @click="router.push('/front/home')">前台首页</el-button>
-
         <el-dropdown trigger="click">
           <div class="user-info">
             <img :src="userAvatar" alt="用户头像" class="avatar" @error="onAvatarError">
@@ -27,6 +25,11 @@
 
           <template #dropdown>
             <el-dropdown-menu>
+              <!-- 前台入口收进头像菜单：它低频到不值得在页头单独占一个按钮 -->
+              <el-dropdown-item @click="router.push('/front/home')">
+                <el-icon><HomeFilled /></el-icon>
+                <span>前台首页</span>
+              </el-dropdown-item>
               <el-dropdown-item @click="router.push(personPath)">
                 <el-icon><User /></el-icon>
                 <span>个人资料</span>
@@ -79,16 +82,13 @@
         <RouterView />
       </div>
     </div>
-    <div class="admin-footer">
-      <p>个人学习项目 · 所有数据均为模拟数据 · 严禁商业用途</p>
-    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CaretBottom, Lock, SwitchButton, User } from '@element-plus/icons-vue'
+import { CaretBottom, HomeFilled, Lock, SwitchButton, User } from '@element-plus/icons-vue'
 import { useAuth } from '@/composables/useAuth'
 import { useLogout } from '@/composables/useLogout'
 import { avatarSrc, onAvatarError } from '@/utils/avatar'

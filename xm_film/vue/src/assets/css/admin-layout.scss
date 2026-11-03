@@ -103,12 +103,3 @@
   padding: var(--space-16);
   min-height: calc(100vh - 160px);
 }
-
-.admin-footer {
-  text-align: center;
-  padding: var(--space-12);
-  font-size: var(--fs-xs);
-  color: var(--el-text-color-regular);
-  background: var(--el-fill-color-light);
-  border-top: 1px solid var(--el-border-color-lighter);
-}

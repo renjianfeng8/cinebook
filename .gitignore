@@ -84,3 +84,6 @@ JIANLI.txt
 test-results/
 playwright-report/
 blob-report/
+
+# === design skill 的中间产物（截图 / 方向牌 / report）===
+.taste-skill/

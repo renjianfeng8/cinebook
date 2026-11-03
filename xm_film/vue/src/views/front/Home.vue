@@ -32,10 +32,17 @@
                 :class="{ 'hero__slide--active': index === heroIndex }"
                 :aria-hidden="index !== heroIndex"
             >
+              <!-- 源图是 500×750 的竖版海报，直接铺满 16:7 的横幅要放大 2.3 倍，肉眼可见发虚。
+                   改成两层：同图模糊铺底只提供氛围色，清晰的那张按原比例立在右侧。 -->
+              <div
+                  class="hero__bg"
+                  :style="{ backgroundImage: `url(${film.img})` }"
+                  aria-hidden="true"
+              ></div>
+              <div class="hero__scrim" aria-hidden="true"></div>
               <!-- 首屏大图不使用浏览器懒加载：轨道里靠后的几张横向排在视口外，
                    懒加载会一直不触发，滑过去是一片空白 -->
-              <img class="hero__img" :src="film.img" :alt="`《${film.title}》剧照`">
-              <div class="hero__scrim" aria-hidden="true"></div>
+              <img class="hero__poster" :src="film.img" :alt="`《${film.title}》海报`">
               <div class="hero__body">
                 <h2 class="hero__title">{{ film.title }}</h2>
                 <p class="hero__meta">{{ typeText(film) }}</p>
@@ -65,16 +72,17 @@
       <!-- 正在热映 -->
       <div class="section-head">
         <h2 class="section-head__title">正在热映（{{ data.playingTotal }} 部）</h2>
-        <!-- 「全部」不带筛选参数：影片列表页目前只支持 类型/年代/区域 三个筛选，
-             没有按上映状态筛的口径（`/front/movie` 也从不读 query），
-             带上一个没人消费的 ?type= 只会让人以为这里真的筛过 -->
+        <!-- 「全部」不带筛选参数：影片列表页不读路由 query，带上 status 也没人消费。
+             要按上映状态直达，得先在 Movie.vue 里补 route.query 的初始化 -->
         <router-link class="section-head__more" to="/front/movie">
           全部 ›
         </router-link>
       </div>
 
-      <div class="poster-grid">
-        <FilmPosterCard v-for="item in data.playingData" :key="item.id" :film="item">
+      <div ref="gridRef" class="poster-grid">
+        <!-- 网格按 auto-fill 排布，实际条数由 shownCount 决定；判断空态必须看整份数据，
+             不能用 playingShown.length —— 它最少 8 条，永远非 0 -->
+        <FilmPosterCard v-for="item in playingShown" :key="item.id" :film="item">
           <el-button class="poster-buy" size="small" plain type="primary" @click="goToFilmDetail(item.id)">
             购票
           </el-button>
@@ -92,7 +100,7 @@
       </div>
 
       <div class="poster-grid">
-        <FilmPosterCard v-for="item in data.noPlayData" :key="item.id" :film="item">
+        <FilmPosterCard v-for="item in upcomingShown" :key="item.id" :film="item">
           <div class="upcoming-date">{{ item.start }} 上映</div>
         </FilmPosterCard>
       </div>
@@ -119,7 +127,7 @@
                 aria-live="polite"
                 @animationend="todayBoxOffice.fresh = false"
             >{{ todayBoxOffice.total === null ? '—' : formatYuan(todayBoxOffice.total) }}</div>
-            <!-- 按钮让到时间戳这排：36px 大字独占整行，不再与按钮争那 208px，数字不折行 -->
+            <!-- 按钮让到时间戳这排：36px 大字独占整行，不与按钮争 248px 的正文宽度，数字不折行 -->
             <div class="today-box__foot">
               <span class="today-box__time">
                 <template v-if="todayBoxOffice.error && todayBoxOffice.total !== null">
@@ -227,12 +235,33 @@ const HERO_HOVER_DELAY = 120;
 const MIN_REFRESH_MS = 450;
 
 const data = reactive({
-  playingData: [],  // 正在热映展示数据（前 8 条）
-  noPlayData: [],   // 即将上映展示数据（前 8 条）
+  playingData: [],  // 正在热映展示数据（取回前 GRID_FETCH 条，实际渲染前 shownCount 条）
+  noPlayData: [],   // 即将上映展示数据（同上）
   playingTotal: 0,  // 正在热映总数（分页接口的 total）
   noPlayTotal: 0,   // 即将上映总数（分页接口的 total）
   error: false      // 与「暂无数据」区分：网络失败不该显示成"没有影片"
 });
+
+/* 海报墙按「两整行」展示。列数是 auto-fill 排出来的，写死 8 条会和列数错开：
+   5 列时排成 5+3，最后一行空两个位，看着像数据没加载完。 */
+const GRID_ROWS = 2;
+const GRID_MIN_SHOWN = 8;   // 窄屏兜底：列数少时也不比原来的 8 条少
+const GRID_FETCH = 12;      // 最多 6 列 × 2 行；多取的几条不渲染
+
+const gridRef = ref(null);
+const gridCols = ref(0);
+const shownCount = computed(() => Math.max(gridCols.value * GRID_ROWS, GRID_MIN_SHOWN));
+const playingShown = computed(() => data.playingData.slice(0, shownCount.value));
+const upcomingShown = computed(() => data.noPlayData.slice(0, shownCount.value));
+
+/* auto-fill 最终排了几列，浏览器已经算好了，直接读回来比自己按断点推稳。
+   网格没有子元素时轨道也照样解析，所以数据到位前读到的就是正确列数。 */
+const syncGridCols = () => {
+  if (!gridRef.value) return;
+  gridCols.value = getComputedStyle(gridRef.value).gridTemplateColumns.split(' ').length;
+};
+
+let gridObserver = null;
 
 const boxOfficeTop10 = reactive([]);
 const ratingTop5 = reactive([]);
@@ -458,11 +487,11 @@ const loadFilmMarkTop = () => {
   });
 };
 
-// 只取展示所需的 8 条 + 总数：此前拉 /films 全表（42 KB）再在前端过滤，
-// 页面实际只用 8+8 条。总数从分页接口的 total 拿，标题里的「N 部」仍然是全量口径。
+// 只取展示所需的条数 + 总数：此前拉 /films 全表（42 KB）再在前端过滤，
+// 页面实际只用十来条。总数从分页接口的 total 拿，标题里的「N 部」仍然是全量口径。
 const load = () => {
   const fetchByStatus = status => request.get(apiPage(API_PATHS.FILMS), {
-    params: { status, pageNum: 1, pageSize: 8 }
+    params: { status, pageNum: 1, pageSize: GRID_FETCH }
   });
   Promise.all([fetchByStatus('已上映'), fetchByStatus('待上映')]).then(([playing, upcoming]) => {
     if (!isSuccess(playing) || !isSuccess(upcoming)) {
@@ -486,10 +515,16 @@ loadTodayBoxOffice();
 loadFilmBoxOfficeTop();
 loadFilmMarkTop();
 
-onMounted(startHero);
+onMounted(() => {
+  startHero();
+  syncGridCols();
+  gridObserver = new ResizeObserver(syncGridCols);
+  if (gridRef.value) gridObserver.observe(gridRef.value);
+});
 onUnmounted(() => {
   stopHero();
   cancelHeroHover();
+  gridObserver?.disconnect();
 });
 </script>
 
@@ -569,11 +604,30 @@ onUnmounted(() => {
   visibility: visible;
 }
 
-.hero__img {
-  display: block;
-  width: 100%;
+/* 背景层：同一张海报放大模糊，只提供氛围色。
+   它不承载信息，糊掉正是想要的效果 —— 清晰的那张由 .hero__poster 负责。
+   scale(1.2) 是为了把模糊后变透明的边缘推到舞台外，否则四周会露出一圈底色。 */
+.hero__bg {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  filter: blur(56px) saturate(1.2) brightness(0.5);
+  transform: scale(1.2);
+}
+
+/* 竖版海报按原比例显示：高度 = 舞台高度，750 高的源图只缩不放，所以是清晰的。
+   但它落在 .hero__stage 的圆角内，矩形海报压上去会在横向两端切出直角边角，
+   故只给右侧两个角、半径取舞台同值。 */
+.hero__poster {
+  position: absolute;
+  top: 0;
+  right: 8%;
   height: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 0 var(--el-border-radius-base) var(--el-border-radius-base) 0;
   object-fit: cover;
+  box-shadow: var(--el-box-shadow-dark);
 }
 
 /* 渐变遮罩让左侧文字有稳定底色。只含令牌与 transparent 关键字，无硬编码色值 */
@@ -604,7 +658,7 @@ onUnmounted(() => {
 }
 
 /* 深底上的次级说明统一用 --dark-text-secondary（10.84:1），
-   与两个详情页的 hero 取同一个令牌 —— 同一个语义槽位只应有一个答案 */
+   与详情页 hero 取同一个令牌 —— 同一个语义槽位只应有一个答案 */
 .hero__meta {
   margin-top: var(--space-8);
   font-size: var(--fs-base);
@@ -700,9 +754,11 @@ onUnmounted(() => {
 }
 
 /* ---------- 右侧栏 ---------- */
+/* 右侧栏定宽 320：此前是 calc(280px + 5%)，宽度随视口一起长，把主栏挤成
+   「6 列差 12px」的临界值。定宽后主栏在 1600 容器下稳定拿到 1248，正好 6 列。 */
 .home-aside {
-  width: 280px;
-  margin-left: var(--space-48);
+  width: 320px;
+  margin-left: var(--space-32);
 }
 
 .home-aside__section {
@@ -746,7 +802,7 @@ onUnmounted(() => {
 }
 
 /* 前台数据大字，--fs-5xl 给「评分 / 票房」。
-   nowrap 兜住「元」被折到第二行：36px 字在 208px 内容区里一折行，
+   nowrap 兜住「元」被折到第二行：36px 字在 248px 内容区里一折行，
    刷新前后高度一变，整个数字就上下跳。 */
 .today-box__amount {
   color: var(--el-text-color-primary);
@@ -766,7 +822,7 @@ onUnmounted(() => {
 
 /* 数字刚更新：一次性的颜色脉冲，让「刷新到了」看得见。
    取主色基色（前台 #BF352D，浅底仍达正文对比度）回落到默认文字色；
-   只在本组件 scoped 块引用，非共享关键帧，不进 global.css。 */
+   按类名生成的作用域选择器实现，不是 @keyframes，故无需担心全局污染。 */
 .today-box__amount--fresh {
   animation: today-amount-flash 500ms ease-out;
 }

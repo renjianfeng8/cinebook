@@ -42,10 +42,6 @@
 
         <!-- 已登录：显示用户信息 -->
         <template v-else>
-          <!-- 影院/管理员登录后显示后台入口 -->
-          <el-button v-if="isCinema || isAdmin" type="primary" size="small" class="admin-btn" @click="goAdmin">
-            管理后台
-          </el-button>
           <el-dropdown trigger="click">
             <div class="user-info">
               <img :src="userAvatar" alt="用户头像" class="avatar" @error="onAvatarError">
@@ -54,6 +50,8 @@
             </div>
             <template #dropdown>
               <el-dropdown-menu>
+                <!-- 后台入口收进头像菜单：它足够低频，不值得在页头单独占一个按钮 -->
+                <el-dropdown-item v-if="isCinema || isAdmin" @click="goAdmin">管理后台</el-dropdown-item>
                 <template v-if="showUserEntries">
                   <el-dropdown-item @click="router.push('/front/person')">个人中心</el-dropdown-item>
                   <el-dropdown-item @click="router.push('/front/account')">我的账户</el-dropdown-item>
@@ -72,58 +70,12 @@
       <RouterView />
     </div>
 
-    <!-- 页脚 -->
-    <footer class="front-footer">
-      <div class="footer-main">
-        <div class="footer-wrapper">
-          <div class="footer-column">
-            <h3 class="footer-title">项目声明</h3>
-            <ul class="footer-links">
-              <li>本系统为个人学习项目</li>
-              <li>所有数据均为模拟数据</li>
-              <li>严禁用于任何商业用途</li>
-              <li>部分素材来源网络，侵删</li>
-            </ul>
-          </div>
-          <div class="footer-column">
-            <h3 class="footer-title">功能与风险</h3>
-            <ul class="footer-links">
-              <li>本系统仅展示功能演示</li>
-              <li>不提供真实购票服务</li>
-              <li>余额充值为模拟数据</li>
-              <li>使用风险由用户自行承担</li>
-            </ul>
-          </div>
-
-          <div class="footer-column">
-            <h3 class="footer-title">用户信息与隐私</h3>
-            <ul class="footer-links">
-              <li>本系统不收集真实个人信息</li>
-              <li>注册信息仅用于功能演示</li>
-              <li>密码采用加密存储</li>
-              <li>请勿使用真实密码注册</li>
-            </ul>
-          </div>
-
-          <div class="footer-column contact-column">
-            <h3 class="footer-title">版权信息</h3>
-            <div class="footer-copyright">
-              <p class="contact-item">© 2024-2026 {{ SITE_NAME }}</p>
-              <p class="contact-item">个人学习项目 保留所有权利</p>
-              <p class="contact-item">本系统仅用于技术学习与交流</p>
-              <p class="contact-item">联系方式: 2145345678@qq.com</p>
-            </div>
-          </div>
-
-        </div>
+    <div class="front-footer">
+      <div class="footer-disclaimer">
+        <p>本系统为 <strong>个人学习项目</strong>，不反映真实市场情况。</p>
+        <p class="footer-disclaimer__note">严禁将本系统用于任何商业用途。使用本系统即表示您已了解并同意上述条款。</p>
       </div>
-      <div class="footer-bottom">
-        <div class="footer-disclaimer">
-          <p>本系统为 <strong>个人学习项目</strong>，不反映真实市场情况。</p>
-          <p class="footer-disclaimer__note">严禁将本系统用于任何商业用途。使用本系统即表示您已了解并同意上述条款。</p>
-        </div>
-      </div>
-    </footer>
+    </div>
 
   </div>
 </template>
@@ -199,6 +151,25 @@ const handleSearch = () => {
 
 .front-content {
   flex: 1;
+}
+
+/* 页脚只剩底部两行免责声明：深底浅字，与页脚时期的观感一致 */
+.front-footer {
+  margin-top: var(--space-64);
+  background-color: var(--dark-bg);
+  color: var(--dark-text-faint);
+}
+
+.footer-disclaimer {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: var(--space-16);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+}
+
+.footer-disclaimer__note {
+  margin-top: var(--space-4);
 }
 
 /* ============================================================
@@ -371,87 +342,6 @@ const handleSearch = () => {
   white-space: nowrap;
 }
 
-.front-footer {
-  background-color: var(--dark-bg);
-  color: var(--dark-text);
-  padding: 0;
-  margin-top: var(--space-64);
-}
-
-.footer-main {
-  border-bottom: 1px solid var(--dark-divider);
-  padding: var(--space-20) 0 var(--space-12);
-  background-color: var(--dark-bg);
-}
-
-.footer-wrapper {
-  color: var(--dark-text-muted);
-  max-width: 950px;
-  margin: 0 auto;
-  display: flex;
-}
-
-.footer-column {
-  flex: 1;
-  margin-bottom: var(--space-16);
-}
-
-.footer-title {
-  font-size: var(--fs-md);
-  font-weight: var(--fw-bold);
-  margin-bottom: var(--space-12);
-  position: relative;
-  padding-bottom: var(--space-12);
-  color: var(--color-brand);
-}
-
-.footer-title::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 30px;
-  height: 2px;
-  background-color: var(--color-brand);
-}
-
-.footer-links {
-  list-style: none;
-  padding: 0;
-}
-
-.footer-links li {
-  margin-bottom: var(--space-8);
-  font-size: var(--fs-sm);
-  color: var(--dark-text-muted);
-  cursor: default;
-  line-height: var(--lh-base);
-}
-
-.footer-links li:hover {
-  color: var(--color-brand);
-}
-
-.contact-column {
-  display: flex;
-  flex-direction: column;
-}
-
-.contact-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--space-8);
-  font-size: var(--fs-sm);
-  color: var(--dark-text-muted);
-}
-
-.footer-bottom {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: var(--space-16);
-  font-size: var(--fs-xs);
-  color: var(--dark-text-faint);
-}
 /* 未登录：登录 / 注册（间距由 gap 统一，替代原来的 margin） */
 .auth-links {
   display: flex;
@@ -474,9 +364,6 @@ const handleSearch = () => {
  * 原用 --el-text-color-disabled 属语义误用（该元素并未禁用）。 */
 .header-divider {
   color: var(--el-text-color-placeholder);
-}
-.admin-btn {
-  flex: 0 0 auto;
 }
 
 /* ---------- 窄屏逐级收窄间距与搜索框基准宽，给导航让出空间 ----------
