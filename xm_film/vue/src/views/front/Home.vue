@@ -40,15 +40,15 @@
                   aria-hidden="true"
               ></div>
               <div class="hero__scrim" aria-hidden="true"></div>
-              <!-- 首屏大图不使用浏览器懒加载：轨道里靠后的几张横向排在视口外，
-                   懒加载会一直不触发，滑过去是一片空白 -->
-              <img class="hero__poster" :src="film.img" :alt="`《${film.title}》海报`">
               <div class="hero__body">
                 <h2 class="hero__title">{{ film.title }}</h2>
                 <p class="hero__meta">{{ typeText(film) }}</p>
                 <p v-if="scoreOf(film)" class="hero__score">{{ scoreOf(film) }}</p>
                 <router-link class="hero__cta" :to="`/front/filmDetail/${film.id}`">购票</router-link>
               </div>
+              <!-- 首屏大图不使用浏览器懒加载：轨道里靠后的几张横向排在视口外，
+                   懒加载会一直不触发，滑过去是一片空白 -->
+              <img class="hero__poster" :src="film.img" :alt="`《${film.title}》海报`">
             </div>
           </div>
         </div>
@@ -79,33 +79,35 @@
         </router-link>
       </div>
 
-      <div ref="gridRef" class="poster-grid">
-        <!-- 网格按 auto-fill 排布，实际条数由 shownCount 决定；判断空态必须看整份数据，
-             不能用 playingShown.length —— 它最少 8 条，永远非 0 -->
-        <FilmPosterCard v-for="item in playingShown" :key="item.id" :film="item">
-          <el-button class="poster-buy" size="small" plain type="primary" @click="goToFilmDetail(item.id)">
-            购票
-          </el-button>
-        </FilmPosterCard>
-      </div>
-      <div v-if="data.error" class="empty-hint">数据加载失败，请稍后重试</div>
-      <div v-else-if="!data.playingData.length" class="empty-hint">暂无数据</div>
+      <div ref="wallRef">
+        <div class="poster-grid">
+          <!-- 网格按 auto-fill 排布，实际条数由 shownCount 决定；判断空态必须看整份数据，
+               不能用 playingShown.length —— 它最少 8 条，永远非 0 -->
+          <FilmPosterCard v-for="item in playingShown" :key="item.id" :film="item">
+            <el-button class="poster-buy" size="small" plain type="primary" @click="goToFilmDetail(item.id)">
+              购票
+            </el-button>
+          </FilmPosterCard>
+        </div>
+        <div v-if="data.error" class="empty-hint">数据加载失败，请稍后重试</div>
+        <div v-else-if="!data.playingData.length" class="empty-hint">暂无数据</div>
 
-      <!-- 即将上映 -->
-      <div class="section-head home-main__upcoming">
-        <h2 class="section-head__title">即将上映（{{ data.noPlayTotal }} 部）</h2>
-        <router-link class="section-head__more" to="/front/movie">
-          全部 ›
-        </router-link>
-      </div>
+        <!-- 即将上映 -->
+        <div class="section-head home-main__upcoming">
+          <h2 class="section-head__title">即将上映（{{ data.noPlayTotal }} 部）</h2>
+          <router-link class="section-head__more" to="/front/movie">
+            全部 ›
+          </router-link>
+        </div>
 
-      <div class="poster-grid">
-        <FilmPosterCard v-for="item in upcomingShown" :key="item.id" :film="item">
-          <div class="upcoming-date">{{ item.start }} 上映</div>
-        </FilmPosterCard>
+        <div class="poster-grid">
+          <FilmPosterCard v-for="item in upcomingShown" :key="item.id" :film="item">
+            <div class="upcoming-date">{{ item.start }} 上映</div>
+          </FilmPosterCard>
+        </div>
+        <div v-if="data.error" class="empty-hint">数据加载失败，请稍后重试</div>
+        <div v-else-if="!data.noPlayData.length" class="empty-hint">暂无数据</div>
       </div>
-      <div v-if="data.error" class="empty-hint">数据加载失败，请稍后重试</div>
-      <div v-else-if="!data.noPlayData.length" class="empty-hint">暂无数据</div>
     </div>
 
     <!-- 右侧栏 -->
@@ -248,17 +250,22 @@ const GRID_ROWS = 2;
 const GRID_MIN_SHOWN = 8;   // 窄屏兜底：列数少时也不比原来的 8 条少
 const GRID_FETCH = 12;      // 最多 6 列 × 2 行；多取的几条不渲染
 
-const gridRef = ref(null);
+const wallRef = ref(null);
 const gridCols = ref(0);
-const shownCount = computed(() => Math.max(gridCols.value * GRID_ROWS, GRID_MIN_SHOWN));
+// 上限取已取回的条数：列数再多也只有这么多片可排，多 slice 出来的也是空
+const shownCount = computed(() =>
+  Math.min(Math.max(gridCols.value * GRID_ROWS, GRID_MIN_SHOWN), GRID_FETCH)
+);
 const playingShown = computed(() => data.playingData.slice(0, shownCount.value));
 const upcomingShown = computed(() => data.noPlayData.slice(0, shownCount.value));
 
 /* auto-fill 最终排了几列，浏览器已经算好了，直接读回来比自己按断点推稳。
-   网格没有子元素时轨道也照样解析，所以数据到位前读到的就是正确列数。 */
+   只量海报网格本身：空态提示若留在同一个网格里，auto-fill 会按「总宽够放 6 个
+   minmax(180px)」算出比渲染宽一格以上的列数。 */
 const syncGridCols = () => {
-  if (!gridRef.value) return;
-  gridCols.value = getComputedStyle(gridRef.value).gridTemplateColumns.split(' ').length;
+  const grid = wallRef.value?.querySelector('.poster-grid');
+  if (!grid) return;
+  gridCols.value = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
 };
 
 let gridObserver = null;
@@ -518,8 +525,9 @@ loadFilmMarkTop();
 onMounted(() => {
   startHero();
   syncGridCols();
+  // 观察外壳而不是网格：数据到位后网格才出现，外壳一直在
   gridObserver = new ResizeObserver(syncGridCols);
-  if (gridRef.value) gridObserver.observe(gridRef.value);
+  if (wallRef.value) gridObserver.observe(wallRef.value);
 });
 onUnmounted(() => {
   stopHero();
@@ -567,6 +575,9 @@ onUnmounted(() => {
   overflow: hidden;
   overflow: clip;
   aspect-ratio: 16 / 7;
+  /* 1600 容器下主栏 1248 时高 546，装得下 32px 标题 + 36px 评分 + CTA。
+     主栏再窄（约 <700px）高度就不够了，给一个下限，也兜住 CTA 底边 */
+  min-height: 300px;
   border-radius: var(--el-border-radius-base);
   background-color: var(--el-fill-color-light);
 }
@@ -590,6 +601,7 @@ onUnmounted(() => {
 
 .hero__slide {
   position: relative;
+  display: flex;
   flex: 0 0 100%;
   height: 100%;
   /* 屏幕外的几张要排除在 Tab 顺序与无障碍树之外：横向虽被 overflow 裁掉，
@@ -617,16 +629,15 @@ onUnmounted(() => {
 }
 
 /* 竖版海报按原比例显示：高度 = 舞台高度，750 高的源图只缩不放，所以是清晰的。
-   但它落在 .hero__stage 的圆角内，矩形海报压上去会在横向两端切出直角边角，
-   故只给右侧两个角、半径取舞台同值。 */
+   它和文字同处一条 flex 行：文字 flex:1 吃掉剩余宽度，海报按比例占右侧 ——
+   之前用 right:8% + max-width:45% 两个百分比各自定位，舞台比例一改就会叠到一起。 */
 .hero__poster {
-  position: absolute;
-  top: 0;
-  right: 8%;
+  position: relative;
+  flex: 0 0 auto;
   height: 100%;
   aspect-ratio: 2 / 3;
+  /* 贴在舞台右缘，只给这一侧补圆角；左侧是直边，由自身形状收边 */
   border-radius: 0 var(--el-border-radius-base) var(--el-border-radius-base) 0;
-  object-fit: cover;
   box-shadow: var(--el-box-shadow-dark);
 }
 
@@ -643,11 +654,12 @@ onUnmounted(() => {
 }
 
 .hero__body {
-  position: absolute;
-  top: 50%;
-  left: var(--space-48);
-  max-width: 45%;
-  transform: translateY(-50%);
+  position: relative;
+  align-self: center;
+  flex: 1;
+  min-width: 0;
+  /* 左右留白：左边给标题，右边把文字与海报隔开，海报贴舞台右缘 */
+  padding: 0 var(--space-32) 0 var(--space-48);
 }
 
 /* 深色块上的文字一律用深色表面令牌 */
