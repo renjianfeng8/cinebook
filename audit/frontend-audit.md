@@ -5,19 +5,21 @@
 > 复核更正：2026-10-18 时 `views/` 下共 **46 个 `.vue`**（另有 3 个壳 `Front.vue` / `Back.vue` / `Manage.vue` 与 `Login` / `Register` / `404` 也在此目录，均已计入），实测 13,399 行。2026-10-22 新增共享壳 `AdminShell.vue` 与 `manage/Finance.vue` 后为 **48 个 / 13,572 行**。
 
 > **历史快照（2026-10-22）**：当时基线 `master` @ `2286861e`；A/B/C 项已于 2026-10-23 提交。`npm run build` 通过，无头 Chrome 冒烟 5/5（C1–C3）、8/8（UX）、5/5（管理端筛选）、5/5（跨页选择）。8 条 `Web:S6819` 已于 2026-10-22 修复，FE-60 已于 2026-10-27 修复。
+>
+> **2026-11-11 复核**：当前 `views/` 48 个 / 12,170 行，前端没有新增在跟踪条目；后端入口加固（分页上限、口令长度、删除守卫）不改变前端契约。下文行数保留历史快照，不逐条改写。
 
 本文件登记 2026-10-14 起前端代码安全与质量审查的结论。第一轮审查 `xm_film/vue/src/router/`（导航守卫与路由表，vue-router 4.5.1），并登记该轮牵连核实的跨文件前端问题（前端鉴权与跳转口径：`utils/request.js`、`composables/useAuth.js`、`views/Login.vue`、`views/404.vue`、`views/Front.vue`、`views/back/Back.vue`、`views/manage/Manage.vue`）。同日第二轮审查 `xm_film/vue/src/composables/` 三个复用件（`useAuth.js`、`useCrud.js`、`useFormDialog.js`）及其调用方（`views/manage/*`、`views/back/*`、`views/front/*`），结论见「已修复（composables 复用件）」一节。2026-10-15 第三轮审查 `xm_film/vue/src/views/` 全目录（**当时 46 个视图文件，13,399 行**；原文误作 47 / 12.8k；2026-10-22 为 48 / 13,572），结论见「已修复（views/ 目录）」及下方当前未做条目；同日就 FE-48 做契约对齐（前端读错键名，非后端缺字段），见「已修复（契约对齐）」，多角色 1:N 需求转登 `audit/backend-backlog.md`。后端条目另见 `audit/backend-backlog.md`，本文件不重复。2026-10-15 另对重做后的前台影院列表页做了复查（并核到与 FE-34 同形的后端前缀匹配），结论见「已修复（影院列表页复查）」及下方当前未做条目。
 
 维护口径：一处事实一处归属；每条给出 `文件` 与符号，行号随改动可能漂移、以符号为准。状态分三档：已修复、当前未做、已核验非缺陷。编号 FE-xx 与后端 BL-xx 区隔。
 
-更新日期：2026-10-27（当前状态见下方「当前未做」）。
+更新日期：2026-11-11（当前状态见下方「当前未做」；该节结论自 2026-10-27 起未变）。
 
 ## 当前未做（2026-10-27）
 
 **没有在跟踪的条目。** 本轮收口：
 
 - **已修**：FE-05（路由门禁断言测试，`src/router/routes.test.js`）、FE-68（列表图片 `loading="lazy" decoding="async"`）。
-- **关闭，不再跟踪**：FE-09（无消费者的 `meta.name`）、FE-18（网络失败仍保持登录：对本地演示，「网络抖动不掉登录」是可接受取舍）、FE-19（失败语义下沉拦截器：124 处调用点已收敛，重构属行为变更）、FE-49（分页两套口径：手写页面已补 `loadSeq`）、`S3776` ×2（认知复杂度：只在改那两个文件时顺手拆）、FE-70–74（性能候选：等真机指标变差再做）。
+- **关闭，不再跟踪**：FE-09（无消费者的 `meta.name`）、FE-18（网络失败仍保持登录：对本地演示，「网络抖动不掉登录」是可接受取舍）、FE-19（失败语义下沉拦截器：115 处调用点已收敛到 `isSuccess()`，重构属行为变更）、FE-49（分页两套口径：手写页面已补 `loadSeq`）、`S3776` ×2（认知复杂度：只在改那两个文件时顺手拆）、FE-70–74（性能候选：等真机指标变差再做）。
 
 判断口径：剩余条目都不改变用户可见结果，或只在改动对应文件时才值得做；继续挂在表里只会每轮重新论证一遍。
 
@@ -33,7 +35,7 @@
 | 编号 | 位置 | 问题 | 处置 |
 | --- | --- | --- | --- |
 | FE-11 | composables/useCrud.js `load` | 无请求序号。搜索/翻页/改页大小并发触发多次 `load` 时，慢的旧响应后到会覆盖新结果；且任一请求的 `finally` 先到即把 `loading` 置 false，新请求仍在途却已收起转圈。本机后端 + 30000ms 超时下概率低但可达（连点页码）。 | `load` 前置递增 `loadSeq`，仅序号最新的响应写入 `dataList`/`total`/`error`，`loading` 也只由最新请求复位。 |
-| FE-12 | composables/useCrud.js `load`（`del`/`delBatch` 均经此重载） | 删除后按原 `pageNum` 重新加载，不收敛页码。后端 PageMethod.startPage 未开 reasonable，删空末页后该页只返回空列表而 `total` 仍 >0，表格渲染「暂无数据」——前面明明还有数据。 | `load` 成功且 `list` 空、`total>0`、`pageNum>1` 时回退第 1 页并重载。 |
+| FE-12 | composables/useCrud.js `load`（`del`/`delBatch` 均经此重载） | 删除后按原 `pageNum` 重新加载，不收敛页码。后端分页不收敛页码（`PageLimit` 也不开 `reasonable`），删空末页后该页只返回空列表而 `total` 仍 >0，表格渲染「暂无数据」——前面明明还有数据。 | `load` 成功且 `list` 空、`total>0`、`pageNum>1` 时回退第 1 页并重载。 |
 | FE-13 | composables/useAuth.js `verifyToken` | 令牌在 `/me` 解析之后才从 storage 读回（`getStoredUser()?.token`）。验签期间登出/换号/他标签页清空 storage，则解析时 `stored` 为 null，`setUser({ ...res.data, token: undefined })` 把「有角色、无令牌」的用户写回 storage —— isLoggedIn 为假、后续请求丢 Authorization、守卫再拦，需整页刷新才自愈。 | 发请求前捕获 `currentToken`；解析时若 `user.value.token !== currentToken` 即丢弃结果（登录态已变），否则用捕获的令牌回填。 |
 | FE-14 | composables/useAuth.js `init` | `init()` 写在 `useAuth()` 工厂体内，每个调用 `useAuth()` 的组件挂载都触发一次 `GET /auth/me`（约 15 个组件；壳与子页同时调用者每次导航打两发）。`globalVerifying` 只降不升，`isLoggedIn` 的门只护得住首次请求。 | 加模块级 `verified` 一次性闸门：`init` 仍每次从 storage 同步单例，但 `/me` 全生命周期只验一次。此改动同时解除了 FE-04 的前置阻塞（见下）。 |
 | FE-15 | composables/useFormDialog.js `submit` | 无 in-flight 守卫，保存按钮无 loading/disabled。双击（或输入框 `@keyup.enter`）触发两次写入：无 id 的表插两条，显式写 id 的五张表（admin/area/type/notice/video）第二次撞主键、成功之后反报错。 | `submit` 进入即置 `submitting` 守卫、`finally` 复位。守卫必须在 `validate()` **之前**置位——置于校验之后时两次调用都能先过校验，拦不住。`submitting` 一并返回供按钮绑 loading。 |
@@ -117,7 +119,7 @@
 | FE-05 | router/index.js 路由表 | meta 两种放置范式并存且默认方向相反：/manage、/back 把 requiresAuth+roles 标在父路由（子路由只带 name），/front 父无 meta、逐子标 requiresAuth/roles。新增 /front 子路由漏写 meta → 合并为 `{}` → 落末尾 next() 静默公开（前台含资金类页面）；新增 /manage 子路由则静默变 ADMIN-only。无类型或测试可拦。 | 统一为一套范式（建议门禁标记落父路由，子路由只声明例外），或加路由表单测断言：受保护前缀下的每个子路由必须带门禁标记。 |
 | FE-09 | router/index.js 路由表 meta.name | meta.name 仅被 Manage.vue、Back.vue 的面包屑读取；/front 全树与 login/register/404 的 20 余处 name 渲染不到任何地方，属纯维护负担，且看起来仍权威。 | 删除 /front 树与独立路由上无消费者的 meta.name，或补上消费者。 |
 | FE-18 | composables/useAuth.js `verifyToken` 的 catch | 仅 401/403 触发登出；网络中断、500、超时被吞，用户保持「已登录」而令牌可能已失效，直到下一次真实请求 401 才清。刻意 fail-open（避免网络抖动误登出）与非刻意漏网在此实现里难分。 | 若判定为缺陷：对「非网络类失败」（如 5xx）复用 `logout`，仅在 `ERR_NETWORK`/`ECONNABORTED` 时保持登录。属行为变更，先定口径再动。 |
-| FE-19 | utils/request.js 响应拦截器；全仓 `res.code === '200'` | 拦截器已解包 `response.data`，却把业务码判断留给每个调用方；FE-66 已把字面量收敛为 `isSuccess()`（当时 117 处 / 39 文件，现 124 处 / 40 文件），但仍无单一拦截器出口，协议变更仍要全量走调用方。 | 在拦截器内归一（`code !== '200'` 直接 reject 并给统一提示）。属行为变更，单列一轮。 |
+| FE-19 | utils/request.js 响应拦截器；全仓 `res.code === '200'` | 拦截器已解包 `response.data`，却把业务码判断留给每个调用方；FE-66 已把字面量收敛为 `isSuccess()`（当时 117 处 / 39 文件，现 115 处 / 38 文件），但仍无单一拦截器出口，协议变更仍要全量走调用方。 | 在拦截器内归一（`code !== '200'` 直接 reject 并给统一提示）。属行为变更，单列一轮。 |
 | FE-49 | views/front/Cinema.vue；views/front/Orders.vue；views/front/Movie.vue；views/manage/CinemaDirectory.vue | 分页列表各自手搓（`pageNum`/`pageSize`/`total`/`load`/`handlePage`），未复用 `useCrud`，因而不带它已有的请求序号与越界回退。第三轮已就地补齐由此派生的具体缺陷（FE-25/FE-26/FE-30/FE-31），但两套口径并存本身仍在。 | 收敛到 `useCrud`（同端点 `manage/Cinema.vue` 已在用）；跨文件重构，属独立一轮。另：`front/Cinema.vue` 的 `:page-sizes`/`@size-change` 因 layout 无 `sizes` 曾为死配置，2026-10-21 已补 `sizes`。**2026-10-21 部分修复**：`front/Orders`、`front/Cinema` 已改用 `usePagedList`；`front/Movie`、`back/*` 仍手写分页（已补 `loadSeq`，见 FE-65）。 |
 
 ## 2026-10-18 全盘复核新增

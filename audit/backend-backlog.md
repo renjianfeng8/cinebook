@@ -8,11 +8,23 @@
 
 维护口径：一处事实一处归属；每条给出 `文件` 与符号，行号随改动可能漂移、以符号为准。状态分三档：待办、有意不整改（与既定政策一致，非债务）、已核验非缺陷；修复完成的条目从表中移出，在该节以「本轮修复并移出本表」一句登记；判定不做的条目直接删除，只留一行「关闭记录」（编号 + 理由），避免下一轮重新论证。
 
-更新日期：2026-10-27。当前代码基线：`master` @ `e502811f`；历史清单基线 `bfdd1c07`、`a2144fc4`，复核基线 `3112f8b7`，Sonar 扫描基线 `0ff8331c`。
+更新日期：2026-11-11。当前代码基线：`master` @ `471fb308`；历史清单基线 `bfdd1c07`、`a2144fc4`，复核基线 `3112f8b7`，Sonar 扫描基线 `0ff8331c`。
 
-**当前实测基线**：`mvn test` = **555/555 通过，75 个测试文件**；前端 `npm test` 37 条、`npm run test:e2e` 5 条（2026-10-27）。历史记录：2026-10-26 428/428、2026-10-25 414/414、2026-10-22 403/403、2026-10-20 398/398、2026-10-19 343/343、2026-10-18 309/309。开发库 `xm-film` 已由 `springboot/demo-data.sql` 补入演示影厅、排片与账号，购票主链已实测跑通。
+**当前实测基线**：`mvn test` = **571/571 通过，77 个测试文件**；前端 `npm test` 37 条、`npm run test:e2e` 5 条（2026-11-11）。历史记录：2026-10-27 555/555、2026-10-26 428/428、2026-10-25 414/414、2026-10-22 403/403、2026-10-20 398/398、2026-10-19 343/343、2026-10-18 309/309。开发库 `xm-film` 已由 `springboot/demo-data.sql` 补入演示影厅、排片与账号，购票主链已实测跑通。
 
 **状态口径**：SEC-01/02/03 已于 2026-10-25 修复（见 §安全 的修复记录），历史证据保留；不再作为未修漏洞跟踪。
+
+## 2026-11-11 入口加固（已修复并移出本表）
+
+| 项 | 位置 | 处置 |
+| --- | --- | --- |
+| 分页无上限 | `common/PageLimit` | 全仓 11 处 `/page` 统一经 `PageLimit.startPage`：0/负值回默认 10，`pageSize` 上限 5000（`CinemaDetail.vue` 一次取整院 7 天场次，故不能压到 500；专用场次接口再做时下调）。守卫 `PageLimitTest` |
+| 默认口令 | `AdminService.add`、`UserService.insertUser` | 删除 `admin123` / `user123` 回退，空口令直接 400；与 `CinemaService.insertCinema` 同口径 |
+| 弱口令 | `RegisterRequest`、`PasswordChangeRequest` | 自助注册/改密要求 8–72 位（72 = BCrypt 字节上限）；管理员重置仍为既有 6–64 位 |
+| 影厅删除竞态 | `RoomService.deleteScoped/deleteBatchScoped` | 改用 `selectByIdForUpdate` 锁影厅行（与 `RecordService.add` 同一把锁），批量按 id 升序 |
+| 用户删除漏检查 | `UserService.ensureNoReferences`、`UserMapper.countLedgerReferences` | 同时数 `fund_flow` 与 `recharge_order`，避免只充值过的用户撞 RESTRICT 外键后拿到通用 409 |
+| 管理员删除 | `AdminController`、`AdminService.deleteGuarded/deleteBatchGuarded` | 锁全表管理员行；禁止删当前登录账号，禁止删到 0 个管理员 |
+| 改名撞唯一键 | `AdminService/UserService/CinemaService.update` | 捕获 `DuplicateKeyException` → 409「账号已存在」，与新增路径一致；`DuplicateUsernameGuardTest` 增 3 条 update 用例 |
 
 ## 架构分层（2026-10-19 专项，三项均已修复）
 
@@ -54,7 +66,7 @@
 
 | 编号 | 位置 | 问题 | 影响 | 建议 |
 | --- | --- | --- | --- | --- |
-| **BL-49** | `common/BaseController.getById` | 对**不存在**的 id 返回 `HTTP 200 + code "200" + data null`，而不是 404。实测 `GET /api/v1/films/99999999` → `{"code":"200","msg":"操作成功","data":null}`。 | 前端调用方只要写成 `if (isSuccess(res)) { res.data.xxx }` 就会在"记录刚被删除"时抛错。当时 117 处 `isSuccess()` 调用（现 124 处）里大部分已判 `res.data` 或走列表接口，**未发现实际崩溃**，但这是一个易踩的坑。分页/列表接口不受影响。 | 覆写了 `getById` 的 5 个控制器：`Ordered`/`Record`/`Room`/`User` 走 `selectByIdScoped`，**不存在时抛 404**；`Cinema` 是**有意**返回 null（注释写明"未审核影院不对外展示"，返回 404 会泄露该 id 存在）。其余继承基类的 Film/Type/Area/Actor/Notice/Video 返回 200+null。不宜在基类统一改：改基类会让"有意返回 null"的 Cinema 也变 404，且所有实体的前端分支都要跟着改。建议逐实体判断后覆写。 |
+| **BL-49** | `common/BaseController.getById` | 对**不存在**的 id 返回 `HTTP 200 + code "200" + data null`，而不是 404。实测 `GET /api/v1/films/99999999` → `{"code":"200","msg":"操作成功","data":null}`。 | 前端调用方只要写成 `if (isSuccess(res)) { res.data.xxx }` 就会在"记录刚被删除"时抛错。当时 117 处 `isSuccess()` 调用（现 115 处 / 38 文件）里大部分已判 `res.data` 或走列表接口，**未发现实际崩溃**，但这是一个易踩的坑。分页/列表接口不受影响。 | 覆写了 `getById` 的 5 个控制器：`Ordered`/`Record`/`Room`/`User` 走 `selectByIdScoped`，**不存在时抛 404**；`Cinema` 是**有意**返回 null（注释写明"未审核影院不对外展示"，返回 404 会泄露该 id 存在）。其余继承基类的 Film/Type/Area/Actor/Notice/Video 返回 200+null。不宜在基类统一改：改基类会让"有意返回 null"的 Cinema 也变 404，且所有实体的前端分支都要跟着改。建议逐实体判断后覆写。 |
 
 ## 控制器层测试（2026-10-19 起）
 
@@ -77,7 +89,7 @@
 - **SEC-01**：`RechargeService.handleCallback` 改为仅接受 ADMIN；用户端「模拟支付回调」按钮移除，管理员在「充值流水」页通过/拒绝。真实网关接入时再加签名/查单，当前不再存在“任意用户给自己充值”的路径。
 - **SEC-02**：`jwt.signing-key` 改为从 `.env` 的 `JWT_SIGNING_KEY` 读取，`JwtUtils` 启动时校验长度 ≥ 32 字节；TMDB token、Amap key、DB 口令也一并移入 `.env`（模板见 `.env.example`，`.env` 不入库）。
 - **SEC-03**：删除 `PasswordMatcher` 的 `raw.equals(stored)` 回退；新增 `PlaintextPasswordMigration`，启动时把 user/admin/cinema 的登录口令与 user.pay_password 中的明文统一转成 BCrypt。
-- 守卫：新增 `PlaintextPasswordMigrationTest`、`FileUploadControllerTest`；`mvn test` 现为 **555/555 通过，75 个测试文件**（2026-10-27）。
+- 守卫：新增 `PlaintextPasswordMigrationTest`、`FileUploadControllerTest`；当时 `mvn test` 为 **555/555 通过，75 个测试文件**（2026-10-27；当前 571/571、77 文件）。
 
 **连带发现（中危，未逐条实测）**：
 
@@ -140,7 +152,7 @@
 
 **修复**：`UserService.insertUser` / `AdminService.add` / `CinemaService.insertCinema` 三处 `mapper().insert(...)` 外包 `catch (DuplicateKeyException)`，转成与串行路径**逐字相同**的 `409 + "账号已存在,请更换别的账号"`。
 
-**验证**：新增 `DuplicateUsernameGuardTest` 4 条用例（Mockito 让 mapper 抛 `DuplicateKeyException` 模拟"窗口被撞上"）；实测移除任一 `catch` 后对应用例立即变红。另有一条用例钉住「串行路径与撞键路径的提示必须一致」。
+**验证**：新增 `DuplicateUsernameGuardTest` 4 条用例（Mockito 让 mapper 抛 `DuplicateKeyException` 模拟"窗口被撞上"）；实测移除任一 `catch` 后对应用例立即变红。另有一条用例钉住「串行路径与撞键路径的提示必须一致」。2026-11-11 起同类转换也用于 update 改名路径（User/Admin/Cinema 三处），该测试类扩到 7 条。
 
 ---
 
@@ -175,13 +187,13 @@
 **本节已全部关闭（2026-10-19）**：
 
 - **BL-04（名录导入并发）**：实测**推翻两处工单描述** —— 报的是死锁（非唯一键冲突）；库端 `cinema.directory_id` 原本**没有**唯一索引，同一名录可串行关联两次。修复三层：加 `uk_cinema_directory_id`、逐行捕获 `DuplicateKeyException` 按幂等跳过、`DeadlockLoserDataAccessException` 转 409 提示重试。2 线程 × 7 轮零 500、零重复。详见 `docs/domain.md` §2.4。
-- **BL-05（JVM/DB 时钟混用）**：`pending_timeout_at` 改为 SQL `NOW() + INTERVAL 5 MINUTE` 写入（哨兵 `pendingTimeoutFromDb`），支付路径的超时判定改为 `countExpiredById` 并与清理任务共用 `pendingExpiredCondition` 片段。实测两会话 `NOW()` 相差 8 小时；修复后建单超时点距 DB `NOW()` 恰为 300 秒。守卫 `PendingTimeoutClockTest`（4 条，做过反证）。详见 `docs/domain.md` §3.4。
+- **BL-05（JVM/DB 时钟混用）**：`pending_timeout_at` 改为 SQL `NOW() + INTERVAL 5 MINUTE` 写入（哨兵 `pendingTimeoutFromDb`），支付路径的超时判定改为 `countExpiredById` 并与清理任务共用 `pendingExpiredCondition` 片段。实测两会话 `NOW()` 相差 8 小时；修复后建单超时点距 DB `NOW()` 恰为 300 秒。守卫 `PendingTimeoutClockTest`（4 条，做过反证）。详见 `docs/domain.md` §3.3。
 
 **并发结论的可回归性（2026-10-19 后已关闭）**：BL-48 补了双连接锁测试（`RowLockMutualExclusionTest`，4 张表）与业务级并发测试（`RecordConcurrentOverlapTest`，6 轮），均做过反证。其余并发结论仍为手工实测。
 
 ## 测试覆盖缺口（2026-10-27 已关闭）
 
-23 个 Controller 全部有直接测试；Service、定时任务与异常分支已补齐；mapper XML 参数名有静态守卫（`MapperXmlParameterGuardTest`）与真库执行测试（`MarkEligibilityMapperLoadTest`）。当前 75 文件 / 555 条；前端 Vitest 37 条 + Playwright 冒烟 5 条。
+23 个 Controller 全部有直接测试；Service、定时任务与异常分支已补齐；mapper XML 参数名有静态守卫（`MapperXmlParameterGuardTest`）与真库执行测试（`MarkEligibilityMapperLoadTest`）。当前 77 文件 / 571 条；前端 Vitest 37 条 + Playwright 冒烟 5 条。
 
 历史备忘：`OrderedMapper.countPickedUpByUserAndFilm` 曾因 XML 写 `#{pickedUp}` 而方法签名只有 `userId/filmId`，评论区与发评价在真库上恒抛 `BindingException`；已改走 `@Param("s") OrderStatusCriteria` 并用真库测试钉住。`demo-data.sql` 重跑的余额漂移已由 §1 重置起点修复，末尾 7 项自检全 0。
 
@@ -189,7 +201,7 @@
 
 **BL-06a（状态列是自由字符串）2026-10-27 已修复**：film / record / ordered / recharge_order / cinema 的 status 与三张账号表的 role 均加库级 `CHECK`，`StatusConstraintLoadTest` 钉住非法值被库拒绝。此前误写 `"已停售"` 不报错、`isPurchasable` 也认不出来，会让停售场次静默变成「永远可售」。
 
-本节原登记 **BL-06（支付不复核场次可购性）**，2026-10-19 已修复并移出：`payOrder` 在验密与扣款之前，用 `recordMapper.selectByIdForUpdate` 锁排片行复核 `isPurchasable`；不可购时报 409 且一分钱不动。实测复现与修复细节见 `docs/domain.md` §3.3，守卫 `PayOrderPurchasableGuardTest`（5 条，做过禁用复核的反证）。
+本节原登记 **BL-06（支付不复核场次可购性）**，2026-10-19 已修复并移出：`payOrder` 在验密与扣款之前，用 `recordMapper.selectByIdForUpdate` 锁排片行复核 `isPurchasable`；不可购时报 409 且一分钱不动。实测复现与修复细节见 `docs/domain.md` §3.2，守卫 `PayOrderPurchasableGuardTest`（5 条，做过禁用复核的反证）。
 
 本轮修复并移出本表：BL-07 —— update 路径收口。新增 `common/Identifiable`，`BaseService<T extends Identifiable>.update` 前置判存在（主键缺失或查无此行抛 NOT_FOUND），User/Admin/Cinema/Film 的 `update` 覆写改为委派 `super.update`；OrderedService.update 需回读库行回填 pending_timeout_at，就地判存在，口径相同。行为变更：陈旧表单（行已删）由 200 变 404。
 
@@ -297,7 +309,7 @@
 ## 有意不整改（仅限本机配置项）
 
 - S14 子项：application.yml 中明文 DB 口令、TMDB token、高德 key；file.upload-dir 绝对路径。**2026-10-25 已把前三项移入 `.env`（与 SEC-02 同批修复）**；`upload-dir` 保留本机默认值，可用 `UPLOAD_DIR` 覆盖。
-- **同文件的 `jwt.signing-key` 已于 2026-10-25 移入 `.env` 的 `JWT_SIGNING_KEY`，并在 `JwtUtils` 启动时校验长度**（SEC-02 修复）；当前密钥必须视为已泄露并更换。
+- **同文件的 `jwt.signing-key` 已于 2026-10-25 移入 `.env` 的 `JWT_SIGNING_KEY`，并在 `JwtUtils` 启动时校验长度**（SEC-02 修复）。曾进入 git 历史的旧密钥应视为已泄露，部署环境请使用新生成的密钥。
 
 ## 已核验为非缺陷（防二次误报）
 

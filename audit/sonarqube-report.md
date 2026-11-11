@@ -332,13 +332,13 @@ docker stop sonarqube && docker rm sonarqube
 - `src/main/resources/mapper/*.xml` 无 `${}`，全部走 `#{}`；未发现 SQL 拼接。
 - `application.yml` 的 DB/JWT/TMDB/AMAP 口令全部是 `${ENV:}` 占位，无仓库内硬编码密钥；JWT 密钥启动时校验 ≥32 字节。
 - 口令统一 BCrypt；取票码与导入初始口令走 `SecureCodes`（`SecureRandom`）；上传按 MIME 白名单落盘并用 UUID 命名；CORS 只放配置的来源且带凭据；鉴权前缀有路径边界判断。未发现 `printStackTrace`、`System.out`、弱哈希/弱加密。
-- **不属于 Sonar 规则、本轮未改的一处加固点**：`AdminService.add` 缺省口令 `admin123`、`UserService.insertUser` 缺省口令 `user123`；`RegisterRequest`、`PasswordChangeRequest` 只有 `@NotBlank`，没有最小长度。入口仅管理员，风险低于原 `cinema123`，但仍是已知默认凭证。
+- **不属于 Sonar 规则、本轮未改的一处加固点（2026-11-11 已修）**：`AdminService.add` 缺省口令 `admin123`、`UserService.insertUser` 缺省口令 `user123`；`RegisterRequest`、`PasswordChangeRequest` 只有 `@NotBlank`，没有最小长度。现已删除默认口令回退，自助注册/改密要求 8–72 位；历史记录保留在本节。
 - **已在源码中保留的抑制（共 17 处，均带一行理由）**：主代码 8 处（`S6809` ×5、`S2276`、`S3077`、`S6548`），测试 9 处（`S5778`）。Sonar 面板上不会再出条目；若以后 `BaseService` 改为自调用代理或测试 helper 重排，可再回收这些抑制。
 
 ### 9.4 复扫与验证
 
 - 8.2（10.7 基线）：`files=242 indexed=242 issues=0 failed=0`。
 - 8.45（最新规则）：`files=242 indexed=242 issues=0 failed=0`。
-- `mvn -o test`：547 tests（快照时点；当前 555），0 failures / 0 errors / 0 skipped（2026-10-27；扫描时为 431）。
+- `mvn -o test`：547 tests（快照时点；当时 555，当前 571），0 failures / 0 errors / 0 skipped（2026-10-27；扫描时为 431）。
 - SonarLint standalone 与 SonarQube 服务端仍有口径差（无污点分析、无覆盖率/重复率）；正式门禁仍建议按 §8 的 Docker 流程在 10.7 上复扫一次，预期新增 0 条。
 

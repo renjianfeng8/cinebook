@@ -7,7 +7,7 @@
 三个账号表各自独立、互不 JOIN：`admin`（角色 ADMIN）、`cinema`（CINEMA）、`user`（USER，有余额与支付密码）。
 `entity/Account` 是三者的父类（**无对应表**），`token` / `newPassword` 挂在它上面（既定取舍，不打算拆）。
 
-管理员重置他人登录密码只走 `PUT /auth/password/reset`，只允许 ADMIN，不校验旧密码，新密码 6–64 位并一律 BCrypt 入库；重置会吊销该账号已签发的 JWT（`TokenRevocationService` 按 `iat` 截断，本人改密同样生效），旧令牌在下一次请求即被视为失效。管理端订单的取消/退票复用同一状态机，管理员也不能绕过映前 60 分钟退款截止。
+管理员重置他人登录密码只走 `PUT /auth/password/reset`，只允许 ADMIN，不校验旧密码，新密码 6–64 位并一律 BCrypt 入库；自助注册与本人改密要求 8–72 位（72 是 BCrypt 的字节上限）。重置会吊销该账号已签发的 JWT（`TokenRevocationService` 按 `iat` 截断，本人改密同样生效），旧令牌在下一次请求即被视为失效。管理端订单的取消/退票复用同一状态机，管理员也不能绕过映前 60 分钟退款截止。
 
 关键：**影院的 `id` 同时也是它的「用户 id」**。`ordered.cinema_id` 与 token 里的 `userId` 在 CINEMA 语境下是同一 id 空间，所以 `ensureOrderAccess` 能直接比。
 
@@ -61,7 +61,7 @@
 
 **真实缺陷**：唯一索引挡住了双插，但 `DuplicateKeyException` 无人处理，会变成 500「系统错误」。当前部署难以撞到，但多实例部署或改成直接插入时它立刻暴露。
 
-**修复**：三处 `insert` 外包 `catch (DuplicateKeyException)`，转成与串行路径同一句提示。
+**修复**：三处 `insert` 与三处 `update`（改名撞 `username`）外包 `catch (DuplicateKeyException)`，转成与串行路径同一句提示（409「账号已存在,请更换别的账号」）。
 
 **守卫测试的写法**：Mockito 让 mapper 直接抛 `DuplicateKeyException`，模拟"窗口被撞上"。这是唯一能稳定测到该分支的方式 —— 走 HTTP 永远撞不到。
 
@@ -135,7 +135,7 @@ AND FIND_IN_SET(#{seat}, REPLACE(seat, '，', ',')) > 0
 - 座位规范化：`(\d{1,2})排(\d{1,2})座`，去前导零（`1排01座` → `1排1座`），去重，校验影厅行列（缺省 8×8），上限 **6 座/单**。
 - 库端**无法**建座位唯一索引（座位是逗号串），故没有硬约束兜底。
 
-### 3.3 支付前复核场次（BL-06，2026-10-19 修复）
+### 3.2 支付前复核场次（BL-06，2026-10-19 修复）
 
 **缺陷**：`insertOrder` 判过 `isPurchasable`，但 `payOrder` 完全不看场次。
 
@@ -171,7 +171,7 @@ if (!RecordService.isPurchasable(recordItem)) → 409「该场次已开场或已
 
 **库约束（2026-10-27 已补）**：`record.status` 等状态列已加 `CHECK`，非法值由数据库直接拒绝（`StatusConstraintLoadTest` 钉住）。此前是自由字符串 —— 第一版验证脚本误写成 `"已停售"` 时 `UPDATE` 不报错、`isPurchasable` 也认不出来，于是「停售场次仍可支付」被误判为通过。
 
-### 3.4 待支付超时（BL-05，2026-10-19 修复）
+### 3.3 待支付超时（BL-05，2026-10-19 修复）
 
 **修复前的缺陷**：写入用 JVM 时钟、判定用 DB `NOW()`，两个时钟混用。
 
@@ -210,12 +210,12 @@ if (!RecordService.isPurchasable(recordItem)) → 409「该场次已开场或已
 
 - `updateById` 对这一列用 `<choose>`：只有「显式清空（`clearPendingTimeout=true`）」或「写新值」两种写法，其余更新一律不碰 —— 否则任何部分更新都会顺手清掉倒计时。
 
-### 3.5 金额
+### 3.4 金额
 
 - 下单时 `unit_price` 取场次票价并**快照**（`updateById` 不含该列），`total = unitPrice × number`。
 - 订单金额 `total/payAmount/refundAmount` 均为 `BigDecimal`（BL-24 已完成）；支付/退票直接使用订单金额，不再经过 `double` 往返。
 
-### 3.6 取票码
+### 3.5 取票码
 
 - 8 位 + 中间连字符，字母表剔除 I/L/O/0/1（31^8 ≈ 8.5e11）。
 - **在 `payOrder` 内与扣款同事务生成**，不重试（重试须拆事务）；`uk_ordered_pickup_code` 唯一索引兜底。
@@ -259,8 +259,8 @@ createRecharge（仅 USER，>0 且 ≤50000，建「处理中」单据，不动�
 
 - 存 `user.pay_password`（BCrypt），只有 `user` 表有这三列。
 - 限次：连续错 5 次锁 15 分钟；**支付与改密共用同一计数**（否则改密成为不限次试错通道）。
-- **关键设计**：`checkForPayment` / `checkOldPassword` 标注 `REQUIRES_NEW` 且**返回异常而不是抛出**。原因：失败计数必须先由独立事务提交，若在同一事务内抛出，计数会随回滚一起消失，限次形同虚设。调用方拿到非 null 自行 throw。**改签名前先读这段注释。**
-- `verifyOldPassword`（只验不写）是同类**自调用**，`REQUIRES_NEW` 被代理绕过 —— 它只在"入口无外层事务"（`AccountController` 直接调用）时成立。**不要把它挪进事务方法里。**
+- **关键设计**：`checkForPayment` / `checkOldPassword` 通过 `TransactionTemplate` 显式以 `REQUIRES_NEW` 执行，且**返回异常而不是抛出**。原因：失败计数必须先由独立事务提交，若在同一事务内抛出，计数会随回滚一起消失，限次形同虚设。调用方拿到非 null 自行 throw。**改签名前先读这段注释。**
+- 不用 `@Transactional` 注解：这三个方法会被本类 `changePayPassword` / `verifyOldPassword` 自调用，自调用不经过 AOP 代理，注解式 `REQUIRES_NEW` 会被静默忽略。`TransactionTemplate` 不依赖代理，谁调用都新开事务（BL-50，守卫 `PayPasswordTransactionBoundaryTest`）。
 - 登录密码比对：只认 BCrypt，四个服务类共用 `common/PasswordMatcher`（BL-13）；存量明文由 `PlaintextPasswordMigration` 在启动时统一迁移，SEC-03 的明文回退已删除。
 
 ## 6 评价（mark）

@@ -5,7 +5,7 @@
 | 层 | 选型 | 版本 |
 | --- | --- | --- |
 | 后端 | Spring Boot | 3.3.13 |
-| | Java | 17 |
+| | Java | 17（CI 构建使用 JDK 21） |
 | | MyBatis（XML mapper）+ spring-boot-starter | 3.0.4 |
 | | PageHelper | 1.4.6 |
 | | jjwt | 0.11.5 |
@@ -19,7 +19,7 @@
 | | Vite | 6.4 |
 | | Sass | 1.89 |
 
-前端已接入 **ESLint**（`npm run lint`）与 **Vitest**（`npm test`），未用 Prettier；组件与端到端仍靠 `npm run build` + 无头 Chrome。后端无 H2 / Testcontainers，集成测试直连 `xm_film_test`。
+前端已接入 **ESLint**（`npm run lint`）、**Vitest**（`npm test`）与 **Playwright 冒烟**（`npm run test:e2e`），未用 Prettier。后端无 H2 / Testcontainers，集成测试直连 `xm_film_test`。
 
 ## 2 进程与端口
 
@@ -56,7 +56,7 @@ entity/      (17)  ── 与表一一对应（Account 例外：三账号的父�
 dto/request (32) dto/response (34) ── HTTP 边界只用 DTO，实体不出 controller
 ```
 
-每层文件数（2026-10-27 实测）：controller 23 / 2,046 行，service 26 / 4,176 行，mapper 接口 17 / 467 行，mapper XML 17 / 1,885 行，entity 17 / 564 行，dto 66 / 1,471 行。
+每层文件数（2026-11-11 复核）：controller 23，service 26，mapper 接口 17，mapper XML 17，entity 17，dto 66。
 
 **核心基类**（`common/`）：
 
@@ -101,7 +101,7 @@ dto/request (32) dto/response (34) ── HTTP 边界只用 DTO，实体不出 c
 三层：
 
 1. **传输层**：`common/config/AuthInterceptor`（Spring `HandlerInterceptor`，非 Spring Security 过滤器链）。
-   - `ADMIN_ONLY_PREFIXES`：admins / cinema-directory / tmdb —— 整条前缀按方法无关拦下。
+   - `ADMIN_ONLY_PREFIXES`：admins / cinema-directory / statistics / tmdb —— 整条前缀按方法无关拦下。
    - `ADMIN_WRITE_PREFIXES`：films / actors / areas / types / notices / videos —— 只拦写方法。
    - `PUBLIC_READ_PREFIXES`：films / cinemas / types / areas / notices / actors / records / marks —— GET 匿名可读。
    - `ANONYMOUS_WRITE_EXACT`：`/api/v1/tickets/redeem` —— **精确路径 + 只 POST**。

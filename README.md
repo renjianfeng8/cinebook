@@ -22,7 +22,7 @@
 
 一个**前后端分离、三端协同**的电影购票平台：游客和用户在前台选片购票，影院在后台维护影厅与排片，平台管理员负责账号、影院审核、影片资料与资金流水。
 
-项目不是 CRUD 演示：下单锁座、余额支付、取票码核销、退票回滚都在真实事务里完成，并针对**并发抢座、排片重叠、删除与下单竞争**做了锁与冲突处理。后端 555 条测试、前端 37 条单测、5 条 Playwright 冒烟，CI 全绿。
+项目不是 CRUD 演示：下单锁座、余额支付、取票码核销、退票回滚都在真实事务里完成，并针对**并发抢座、排片重叠、删除与下单竞争**做了锁与冲突处理。后端 571 条测试、前端 37 条单测、5 条 Playwright 冒烟，CI 全绿。
 
 ## 功能一览
 
@@ -79,7 +79,7 @@ flowchart LR
 
 ### 环境要求
 
-- JDK 17+、Maven 3.9+
+- JDK 17+（源码 target 17；CI 构建使用 JDK 21）、Maven 3.9+
 - Node.js 20+（CI 使用 22）
 - MySQL 8.0，开发库 `xm-film`，测试库 `xm_film_test`
 
@@ -132,7 +132,7 @@ cinebook/
 │   ├── springboot/            # Spring Boot 后端
 │   │   ├── src/main/java/     # controller / service / mapper / entity / dto
 │   │   ├── src/main/resources/mapper/
-│   │   ├── src/test/          # 75 个测试文件，含数据库结构快照
+│   │   ├── src/test/          # 77 个测试文件，含数据库结构快照
 │   │   └── demo-data.sql      # 演示业务数据
 │   └── vue/                   # Vue 3 前端
 │       ├── src/views/         # front / back / manage 三端页面
@@ -147,7 +147,7 @@ cinebook/
 
 | 项 | 现状 |
 | --- | --- |
-| 后端测试 | 75 个测试文件 / **555 条**（`mvn test`） |
+| 后端测试 | 77 个测试文件 / **571 条**（`mvn test`） |
 | 前端单测 | 6 个测试文件 / **37 条**（`npm test`） |
 | 浏览器冒烟 | **5 条** Playwright（`npm run test:e2e`） |
 | CI | 后端测试 + 前端 lint / 单测 / 构建 |

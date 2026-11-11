@@ -53,7 +53,7 @@ ANONYMOUS_WRITE_EXACT = { /api/v1/tickets/redeem }
 | 想做的事 | 做法 |
 | --- | --- |
 | 加一个纯 CRUD 资源 | 实体实现 `Identifiable`；mapper 继承 `BaseMapper` 并写 XML（复制 `AreaMapper.xml` 为模板）；service 只实现 `mapper()`；controller `extends BaseController<T,R,V>` 实现两个映射 |
-| 加业务校验 | 覆写 `add/update/delete` 或在 controller 调 `*Scoped` 方法；**`update` 必须委派 `super.update`**（存在性判定的唯一出处） |
+| 加业务校验 | 覆写 `add/update/delete` 或在 controller 调 `*Scoped` 方法；**`update` 必须委派 `super.update`**（存在性判定的唯一出处）。账号类 `update` 还要把 `DuplicateKeyException` 转成 409（改名撞 `username`），与新增路径同一句提示 |
 | 局部更新 | 实体字段为 null 即"不更新"；XML 用 `<if test="x != null">`；`<set>` 结尾必须有 `id = #{id}` 兜底 |
 | 字符串筛选 | 判空必须写 `x != null and x != ''`（新增筛选照此口径；其余同形旧点已核验前端不可达，不再翻动） |
 
@@ -61,12 +61,12 @@ ANONYMOUS_WRITE_EXACT = { /api/v1/tickets/redeem }
 
 - `BaseService` 类级 `@Transactional(readOnly = true)`；写方法逐个覆盖 `@Transactional(rollbackFor = Exception.class)`。
 - 资金路径（`OrderedService.payOrder/refundOrder`、`RechargeService.handleCallback`）与 `WalletService` 同事务。
-- `PayPasswordService` 的两个 check 是 `REQUIRES_NEW` 且返回异常（见 `domain.md` §5）。
+- `PayPasswordService` 的两个 check 用 `TransactionTemplate` 显式 `REQUIRES_NEW` 且返回异常（自调用不走代理，见 `domain.md` §5）。
 - 清理任务 `task/OrderCleanupTask`：`@Scheduled(fixedDelay = 15s)`，入口 `@EnableScheduling`（在 `SpringbootApplication` 上）。
 
 ## 5 数据访问约定
 
-- 分页：controller 里 `PageMethod.startPage(pageNum, pageSize)` 紧跟 `service.selectAll(...)`；**PageHelper 是线程绑定的一次性拦截**，两者之间不能插入其它查询。
+- 分页：controller 里 `PageLimit.startPage(pageNum, pageSize)` 紧跟 `service.selectAll(...)`；**PageHelper 是线程绑定的一次性拦截**，两者之间不能插入其它查询。`PageLimit` 把 0/负值归默认 10，并把 `pageSize` 夹到上限 5000（匿名 `/records/page` 曾可一次取回整表）。
 - 列名映射：`map-underscore-to-camel-case: true` 只作用于 bean 属性，**不作用于 Map 的 key** —— 返回 `Map` 的语句别名必须写 camelCase。
 - `SELECT *` 是常态；join 派生列用别名（`user.name as userName`）。
 - `ONLY_FULL_GROUP_BY` 开启：`GROUP BY` 必须与 `SELECT` 里的表达式**逐字相同**（`DATE_FORMAT(...)` 而非 `DATE(...)`）。
@@ -75,20 +75,20 @@ ANONYMOUS_WRITE_EXACT = { /api/v1/tickets/redeem }
 
 ## 6 测试
 
-75 个测试文件 / 555 条执行（2026-10-27），按启动方式分四类：
+77 个测试文件 / 571 条执行（2026-11-11），按启动方式分四类：
 
 | 类型 | 数量 | 依赖数据库 | 说明 |
 | --- | --- | --- | --- |
 | Mockito 单测 | 21 个类 | 否 | `@ExtendWith(MockitoExtension.class)` + `@InjectMocks` |
-| `@SpringBootTest` 绑定层守卫 | 20 个类（含 `*LoadTest`、`OrderedSeatConflictTest`、`OrderedServiceTest`、并发/事务边界测试、`ControllerAuthClassificationTest`） | **是，走 `xm_film_test`** | 证明 mapper XML 能被 MyBatis 解析并执行；控制器分类守卫也走容器 |
+| `@SpringBootTest` 绑定层守卫 | 21 个类（含 `*LoadTest`、`OrderedSeatConflictTest`、`OrderedServiceTest`、并发/事务边界测试、`ControllerAuthClassificationTest`） | **是，走 `xm_film_test`** | 证明 mapper XML 能被 MyBatis 解析并执行；控制器分类守卫也走容器 |
 | `@WebMvcTest` 控制器切片 | 13 个类（覆盖全部 23 个 Controller） | 否 | 鉴权前缀、角色范围、空请求体、业务码透传 |
-| 纯单元 / 静态守卫 | 22 个类 | 否 | 无上述注解，如 `FileUtilTest`、`TmdbClientTest`、`StatusLiteralGuardTest`、`MapperXmlParameterGuardTest` |
+| 纯单元 / 静态守卫 | 23 个类 | 否 | 无上述注解，如 `FileUtilTest`、`TmdbClientTest`、`StatusLiteralGuardTest`、`MapperXmlParameterGuardTest` |
 
-> `RecordDeleteGuardTest` 同时带 `MockitoExtension` 与 `@SpringBootTest`，前两行各计一次；四类去重后共 75 个文件。
+> `RecordDeleteGuardTest` 同时带 `MockitoExtension` 与 `@SpringBootTest`，前两行各计一次；四类去重后共 77 个文件。
 
 **硬规则**：任何新增 `@SpringBootTest` 必须同时加 `@ActiveProfiles("ci")`；会写库的再加 `@Transactional`。缺前者 = 写开发库，缺后者 = 失败即留脏行。
 
-`OrderedServiceTest` 是唯一一个 `@SpringBootTest(classes = OrderedService.class)`（只装一个 bean 的切片）的单测，53 个用例覆盖了状态机、权限、金额、取票码全路径（mock 掉全部 mapper）。
+`OrderedServiceTest` 是唯一一个 `@SpringBootTest(classes = OrderedService.class)`（只装一个 bean 的切片）的单测，58 个用例覆盖了状态机、权限、金额、取票码全路径（mock 掉全部 mapper）。
 
 一个测不出来的点：`TicketController` 的「GET 同路径必须 401」在 `@WebMvcTest` 里验不了 —— 该控制器只有 `@PostMapping`，GET 在 HandlerMapping 阶段就 405，到不了拦截器。这条由 `AuthInterceptorAccessTest` 在拦截器层覆盖，不要造一个假通过的用例。
 

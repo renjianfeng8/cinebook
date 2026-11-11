@@ -5,25 +5,25 @@
 ```
 src/                       86 文件（vue+js+scss；含路由表与新增的门禁测试）
 e2e/                       3 个 spec + helpers / README（Playwright 冒烟）
-├── views/                 48 个 .vue / 13,572 行
-│   ├── 根目录 7 篇：Front / Back / Manage / AdminShell / Login / Register / 404（989 行）
-│   ├── front/  16 篇 / 7,594 行
-│   ├── back/    7 篇 / 1,341 行
-│   └── manage/ 18 篇 / 3,648 行
-├── components/  6 个 / 1,199 行
+├── views/                 48 个 .vue / 12,170 行
+│   ├── 根目录 7 篇：Front / Back / Manage / AdminShell / Login / Register / 404（894 行）
+│   ├── front/  16 篇 / 6,728 行
+│   ├── back/    7 篇 / 1,210 行
+│   └── manage/ 18 篇 / 3,338 行
+├── components/  6 个 / 1,057 行
 ├── composables/ 6 个（useAuth / useCrud / useFormDialog / usePagedList / useLoginPrompt / useLogout）
 ├── utils/       6 个（含 navigation）
 └── assets/css/  tokens.scss + global.css + index.scss + 4 个布局 scss
 ```
 
-三个最大的单文件：`manage/Home.vue` 974、`front/BuyTicket.vue` 944、`front/Home.vue` 914 行。
+三个最大的单文件：`manage/Home.vue` 858、`front/BuyTicket.vue` 832、`front/Home.vue` 811 行。
 
 ## 2 路由表（`router/routes.js` 存表，`router/index.js` 存守卫）
 
 | 前缀 | 壳 | meta |
 | --- | --- | --- |
-| `/manage/*` | `Manage.vue`（11 行，内部复用 `AdminShell.vue`） | 父级 `requiresAuth + roles:['ADMIN']`，子级只带 `name` |
-| `/back/*` | `Back.vue`（11 行，内部复用 `AdminShell.vue`） | 父级 `requiresAuth + roles:['CINEMA']` |
+| `/manage/*` | `Manage.vue`（9 行，内部复用 `AdminShell.vue`） | 父级 `requiresAuth + roles:['ADMIN']`，子级只带 `name` |
+| `/back/*` | `Back.vue`（9 行，内部复用 `AdminShell.vue`） | 父级 `requiresAuth + roles:['CINEMA']` |
 | `/front/*` | `Front.vue` | 父级无 meta，**逐子标记** `guest` 或 `requiresAuth+roles:['USER']` |
 | `/login` `/register` `/404` | 无壳 | `guest: true` |
 
@@ -54,7 +54,7 @@ e2e/                       3 个 spec + helpers / README（Playwright 冒烟）
 `utils/request.js`：
 
 - `axios.create({ baseURL: API_BASE_URL, timeout: 30000 })`，`API_BASE_URL` 来自 `constants/index.js`（唯一读取点）。
-- 响应拦截器**直接返回 `res.data`**；业务码 `code !== '200'` **不在这里处理**，由各页面自行 `ElMessage.error(res.msg)`（FE-19 仍未改）。当前业务码判断已收敛到 `isSuccess()`：**124 处调用 / 40 个文件，业务码字面量 0 处**。
+- 响应拦截器**直接返回 `res.data`**；业务码 `code !== '200'` **不在这里处理**，由各页面自行 `ElMessage.error(res.msg)`（FE-19 仍未改）。当前业务码判断已收敛到 `isSuccess()`：**115 处调用 / 38 个文件，业务码字面量 0 处**（2026-11-11 复核）。
 - HTTP 401 → 清存储 + 跳登录（防重入）；网络/超时单独中文提示。
 
 `utils/authStorage.js`：localStorage 键 `xm-film-user`；解析失败自动清空。
