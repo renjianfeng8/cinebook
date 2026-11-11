@@ -1,9 +1,9 @@
 package com.example.springboot.service;
 
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.entity.CinemaDirectory;
 import com.example.springboot.mapper.CinemaDirectoryMapper;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +24,7 @@ public class CinemaDirectoryService {
     }
 
     public PageInfo<CinemaDirectory> selectPage(CinemaDirectory query, Integer pageNum, Integer pageSize) {
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         return PageInfo.of(mapper.selectAll(query));
     }
 

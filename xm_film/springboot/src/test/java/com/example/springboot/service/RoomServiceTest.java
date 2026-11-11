@@ -181,7 +181,7 @@ class RoomServiceTest {
 
     @Test
     void deleteIsBlockedByScheduleOrOrders() {
-        when(roomMapper.selectById(1)).thenReturn(room(1, 7));
+        when(roomMapper.selectByIdForUpdate(1)).thenReturn(room(1, 7));
         when(recordService.countByRoomId(1)).thenReturn(1);
         when(orderedService.countByRoomId(1)).thenReturn(0);
 
@@ -194,7 +194,7 @@ class RoomServiceTest {
 
     @Test
     void deleteProceedsWhenUnreferenced() {
-        when(roomMapper.selectById(1)).thenReturn(room(1, 7));
+        when(roomMapper.selectByIdForUpdate(1)).thenReturn(room(1, 7));
         when(recordService.countByRoomId(1)).thenReturn(0);
         when(orderedService.countByRoomId(1)).thenReturn(0);
 
@@ -213,8 +213,8 @@ class RoomServiceTest {
     /** 批量删除“全有或全无”：一条被引用就整批不删，并点名到具体影厅 */
     @Test
     void batchDeleteAggregatesBlockedRowsAndSkipsDelete() {
-        when(roomMapper.selectById(1)).thenReturn(room(1, 7));
-        when(roomMapper.selectById(2)).thenReturn(room(2, 7));
+        when(roomMapper.selectByIdForUpdate(1)).thenReturn(room(1, 7));
+        when(roomMapper.selectByIdForUpdate(2)).thenReturn(room(2, 7));
         when(recordService.countByRoomId(1)).thenReturn(0);
         when(orderedService.countByRoomId(1)).thenReturn(0);
         when(recordService.countByRoomId(2)).thenReturn(3);
@@ -230,7 +230,7 @@ class RoomServiceTest {
 
     @Test
     void batchDeleteProceedsWhenAllClear() {
-        when(roomMapper.selectById(1)).thenReturn(room(1, 7));
+        when(roomMapper.selectByIdForUpdate(1)).thenReturn(room(1, 7));
         when(recordService.countByRoomId(1)).thenReturn(0);
         when(orderedService.countByRoomId(1)).thenReturn(0);
 

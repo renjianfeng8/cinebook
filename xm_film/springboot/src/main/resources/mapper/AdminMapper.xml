@@ -60,6 +60,11 @@
         SELECT token_revoked_before FROM admin WHERE id = #{id}
     </select>
 
+    <!-- 删除守卫：先锁全表行，再数剩余管理员。锁随事务释放 -->
+    <select id="selectIdsForUpdate" resultType="java.lang.Integer">
+        SELECT id FROM admin ORDER BY id FOR UPDATE
+    </select>
+
     <!-- 删除操作 -->
     <delete id="deleteById" parameterType="com.example.springboot.entity.Admin">
         DELETE FROM admin WHERE id = #{id}

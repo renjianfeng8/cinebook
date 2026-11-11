@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 影厅的通用增删改查，外加按影院计数（统计与删除前置校验用）；
@@ -123,7 +124,9 @@ public class RoomService extends BaseService<Room> {
     /** 删除影厅：校验归属，且被排片或订单引用时禁止物理删除 */
     @Transactional(rollbackFor = Exception.class)
     public void deleteScoped(Integer id, String role, Integer userId) {
-        Room room = selectById(id);
+        // 锁影厅行：与 RecordService.add 的 selectByIdForUpdate 抢同一把锁，
+        // 避免「数到 0 个排片 → 并发新增排片 → DELETE 撞外键」的窗口
+        Room room = roomMapper.selectByIdForUpdate(id);
         ensureRoomAccess(room, role, userId);
         ensureNoReferences(id);
         delete(id);
@@ -135,9 +138,14 @@ public class RoomService extends BaseService<Room> {
         if (ids == null || ids.isEmpty()) {
             throw new CustomException(ErrorCode.PARAM_INVALID, "请选择影厅");
         }
+        // 按 id 升序加锁：两个管理员提交 [A,B] 与 [B,A] 时不会互相等待成死锁
+        List<Integer> ordered = ids.stream().filter(Objects::nonNull).distinct().sorted().toList();
+        if (ordered.isEmpty()) {
+            throw new CustomException(ErrorCode.PARAM_INVALID, "请选择影厅");
+        }
         List<String> blocked = new ArrayList<>();
-        for (Integer id : ids) {
-            Room room = selectById(id);
+        for (Integer id : ordered) {
+            Room room = roomMapper.selectByIdForUpdate(id);
             ensureRoomAccess(room, role, userId);
             try {
                 ensureNoReferences(id);
@@ -149,7 +157,7 @@ public class RoomService extends BaseService<Room> {
             }
         }
         BatchDeleteGuard.throwIfBlocked(blocked);
-        deleteBatch(ids);
+        deleteBatch(ordered);
     }
 
     /** 影厅所属影院名称，由影院记录派生；影院不存在时返回 null，由调用方决定拒绝还是保持原值 */

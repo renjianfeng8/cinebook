@@ -12,6 +12,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -134,6 +136,58 @@ class AdminServiceTest {
         assertNull(update.getRole());
         assertEquals("新名字", update.getName());
         verify(adminMapper).updateById(update);
+    }
+
+    @Test
+    void addWithoutPasswordIsRejected() {
+        Admin newAdmin = new Admin();
+        newAdmin.setUsername("newadmin");
+
+        CustomException ex = assertThrows(CustomException.class, () -> adminService.add(newAdmin));
+
+        assertEquals("400", ex.getCode());
+        assertTrue(ex.getMsg().contains("密码"));
+        verify(adminMapper, never()).insert(any());
+    }
+
+    @Test
+    void deleteSelfIsRejected() {
+        when(adminMapper.selectIdsForUpdate()).thenReturn(List.of(1, 2));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> adminService.deleteGuarded(1, 1));
+
+        assertTrue(ex.getMsg().contains("当前登录"));
+        verify(adminMapper, never()).deleteById(any());
+    }
+
+    @Test
+    void deleteLastAdminIsRejected() {
+        when(adminMapper.selectIdsForUpdate()).thenReturn(List.of(1));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> adminService.deleteGuarded(1, 2));
+
+        assertTrue(ex.getMsg().contains("至少保留"));
+        verify(adminMapper, never()).deleteById(any());
+    }
+
+    @Test
+    void deleteOtherAdminSucceeds() {
+        when(adminMapper.selectIdsForUpdate()).thenReturn(List.of(1, 2));
+
+        adminService.deleteGuarded(2, 1);
+
+        verify(adminMapper).deleteById(2);
+    }
+
+    @Test
+    void batchDeleteKeepingOneAdminSucceeds() {
+        when(adminMapper.selectIdsForUpdate()).thenReturn(List.of(1, 2, 3));
+
+        adminService.deleteBatchGuarded(List.of(2, 3), 1);
+
+        verify(adminMapper).deleteBatch(List.of(2, 3));
     }
 
     @Test

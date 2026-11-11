@@ -2,6 +2,7 @@ package com.example.springboot.service;
 
 import com.example.springboot.common.BaseMapper;
 import com.example.springboot.common.BaseService;
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.common.enums.ErrorCode;
 import com.example.springboot.dto.response.FilmTypeJoinView;
 import com.example.springboot.entity.Film;
@@ -11,7 +12,6 @@ import com.example.springboot.mapper.FilmMapper;
 import com.example.springboot.mapper.OrderedMapper;
 import com.example.springboot.mapper.RecordMapper;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -84,7 +84,7 @@ public class FilmService extends BaseService<Film> {
     }
 
     public PageInfo<Film> selectPage(Film film, Integer pageNum, Integer pageSize) {
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         List<Film> list = filmMapper.selectAll(film);
         fillFilmTypes(list);
         return new PageInfo<>(list);

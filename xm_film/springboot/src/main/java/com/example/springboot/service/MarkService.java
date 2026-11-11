@@ -3,6 +3,7 @@ package com.example.springboot.service;
 import com.example.springboot.common.BaseMapper;
 import com.example.springboot.common.BaseService;
 import com.example.springboot.common.OrderStatusCriteria;
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.common.enums.ErrorCode;
 import com.example.springboot.common.enums.RoleEnum;
 import com.example.springboot.dto.response.FilmMarksView;
@@ -15,7 +16,6 @@ import com.example.springboot.mapper.MarkLikeMapper;
 import com.example.springboot.mapper.MarkMapper;
 import com.example.springboot.mapper.OrderedMapper;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -179,7 +179,7 @@ public class MarkService extends BaseService<Mark> {
         // 非 USER 不查本人评价，也免得白跑一次已取票统计
         boolean isUser = RoleEnum.USER.name().equals(role) && viewerId != null;
         Integer viewer = isUser ? viewerId : null;
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         List<MarkView> list = markMapper.selectFilmMarks(filmId, viewer);
         long total = new PageInfo<>(list).getTotal();
         MarkView my = isUser ? markMapper.selectFilmMarkOfUser(filmId, viewer) : null;

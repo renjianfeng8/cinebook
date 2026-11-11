@@ -3,6 +3,7 @@ package com.example.springboot.service;
 import com.example.springboot.common.BaseMapper;
 import com.example.springboot.common.BaseService;
 import com.example.springboot.common.BatchDeleteGuard;
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.common.PasswordMatcher;
 import com.example.springboot.entity.Account;
 import com.example.springboot.entity.User;
@@ -11,7 +12,6 @@ import com.example.springboot.common.enums.RoleEnum;
 import com.example.springboot.exception.CustomException;
 import com.example.springboot.mapper.UserMapper;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 普通用户账号的注册、登录与密码维护。注册时固定角色为 USER、缺省密码兜底，
+ * 普通用户账号的注册、登录与密码维护。注册时固定角色为 USER、密码必填，
  * 密码一律经 BCrypt 存储；更新资料时不允许改动密码与角色字段。
  */
 // 同类调用 BaseService 的 REQUIRED 方法，外层事务已存在；规则说明见 audit/sonarqube-report.md §9.1
@@ -59,8 +59,9 @@ public class UserService extends BaseService<User> {
         if (dbUser != null) {
             throw new CustomException(ErrorCode.BUSINESS_CONFLICT, "账号已存在,请更换别的账号");
         }
-        if (user.getPassword() == null) {
-            user.setPassword("user123");
+        if (user.getPassword() == null || user.getPassword().isBlank()) {
+            // 与影院/管理员一致：不生成公开可查的初始口令
+            throw new CustomException(ErrorCode.PARAM_INVALID, "请设置用户的初始登录密码");
         }
         if (user.getName() == null) {
             user.setName(user.getUsername());
@@ -86,7 +87,12 @@ public class UserService extends BaseService<User> {
         // 角色与密码不由此入口改写；置空后交基类——先判存在，再落库
         user.setPassword(null);
         user.setRole(null);
-        super.update(user);
+        try {
+            super.update(user);
+        } catch (DuplicateKeyException e) {
+            // 改名撞 username 唯一索引：与新增路径同一句提示，而不是漏成 500
+            throw new CustomException(ErrorCode.BUSINESS_CONFLICT, "账号已存在,请更换别的账号");
+        }
     }
 
     public User login(Account account) {
@@ -161,7 +167,7 @@ public class UserService extends BaseService<User> {
     public PageInfo<User> pageScoped(User query, String role, Integer userId,
                                      Integer pageNum, Integer pageSize) {
         if (RoleEnum.ADMIN.name().equals(role)) {
-            PageMethod.startPage(pageNum, pageSize);
+            PageLimit.startPage(pageNum, pageSize);
             return new PageInfo<>(selectAll(query));
         }
         if (RoleEnum.USER.name().equals(role)) {
@@ -195,11 +201,11 @@ public class UserService extends BaseService<User> {
         throw new CustomException(ErrorCode.FORBIDDEN, "权限不足");
     }
 
-    /** 删除用户：仅管理员，且用户有订单时禁止物理删除 */
+    /** 删除用户：仅管理员，且用户有订单或资金记录时禁止物理删除 */
     @Transactional(rollbackFor = Exception.class)
     public void deleteScoped(Integer id, String role, Integer userId) {
         requireAdmin(role);
-        ensureNoOrders(id);
+        ensureNoReferences(id);
         delete(id);
     }
 
@@ -213,7 +219,7 @@ public class UserService extends BaseService<User> {
         List<String> blocked = new ArrayList<>();
         for (Integer id : ids) {
             try {
-                ensureNoOrders(id);
+                ensureNoReferences(id);
             } catch (CustomException e) {
                 if (!BatchDeleteGuard.isBlocked(e)) {
                     throw e;
@@ -225,12 +231,17 @@ public class UserService extends BaseService<User> {
         deleteBatch(ids);
     }
 
-    /** 用户有订单时禁止物理删除，避免连带删除交易凭证 */
-    private void ensureNoOrders(Integer userId) {
+    /** 用户名下有订单或资金记录时禁止物理删除，避免连带删除交易凭证 */
+    private void ensureNoReferences(Integer userId) {
         int orders = orderedService.countByUserId(userId);
         if (orders > 0) {
             throw new CustomException(ErrorCode.BUSINESS_CONFLICT,
                     "该用户已有 " + orders + " 笔订单，无法删除");
+        }
+        int ledgerRows = userMapper.countLedgerReferences(userId);
+        if (ledgerRows > 0) {
+            throw new CustomException(ErrorCode.BUSINESS_CONFLICT,
+                    "该用户已有 " + ledgerRows + " 条充值/资金流水记录，无法删除");
         }
     }
 

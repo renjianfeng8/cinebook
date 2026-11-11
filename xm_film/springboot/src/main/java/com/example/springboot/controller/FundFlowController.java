@@ -1,13 +1,13 @@
 package com.example.springboot.controller;
 
 import com.example.springboot.common.AuthContext;
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.common.Result;
 import com.example.springboot.dto.request.FundFlowRequest;
 import com.example.springboot.dto.response.FundFlowView;
 import com.example.springboot.entity.FundFlow;
 import com.example.springboot.service.FundFlowService;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,7 +33,7 @@ public class FundFlowController {
     public Result<PageInfo<FundFlowView>> page(FundFlowRequest query,
                        @RequestParam(defaultValue = "1") Integer pageNum,
                        @RequestParam(defaultValue = "10") Integer pageSize) {
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         List<FundFlow> list = fundFlowService.selectScoped(toEntity(query), AuthContext.role(), AuthContext.userId());
         PageInfo<FundFlow> src = new PageInfo<>(list);
         PageInfo<FundFlowView> dst = new PageInfo<>();

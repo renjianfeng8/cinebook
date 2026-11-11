@@ -2,6 +2,7 @@ package com.example.springboot.service;
 
 import com.example.springboot.common.BaseMapper;
 import com.example.springboot.common.BaseService;
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.common.PasswordMatcher;
 import com.example.springboot.common.SecureCodes;
 import com.example.springboot.entity.Account;
@@ -20,7 +21,6 @@ import com.example.springboot.mapper.OrderedMapper;
 import com.example.springboot.mapper.RecordMapper;
 import com.example.springboot.mapper.RoomMapper;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -103,7 +103,7 @@ public class CinemaService extends BaseService<Cinema> {
 
     public PageInfo<Cinema> selectPage(Cinema cinema, Integer filmId, Integer pageNum, Integer pageSize,
                                        boolean approvedOnly) {
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         List<Cinema> list = cinemaMapper.selectByFilmId(cinema, filmId, approvedOnly);
         return PageInfo.of(list);
     }
@@ -250,7 +250,12 @@ public class CinemaService extends BaseService<Cinema> {
     public void update(Cinema cinema) {
         cinema.setPassword(null);
         cinema.setRole(null);
-        super.update(cinema);
+        try {
+            super.update(cinema);
+        } catch (DuplicateKeyException e) {
+            // 改名撞 username 唯一索引：与新增路径同一句提示，而不是漏成 500
+            throw new CustomException(ErrorCode.BUSINESS_CONFLICT, "账号已存在,请更换别的账号");
+        }
     }
 
     /**

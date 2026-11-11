@@ -129,6 +129,64 @@ class DuplicateUsernameGuardTest {
                 .hasMessageContaining("账号已存在");
     }
 
+    /** 改用户名撞唯一键：更新路径同样转 409，而不是漏成 500 */
+    @Test
+    void duplicateUserUsernameOnUpdateBecomesBusinessConflict() {
+        when(userMapper.selectById(1)).thenReturn(new User());
+        when(userMapper.updateById(any(User.class)))
+                .thenThrow(new DuplicateKeyException("Duplicate entry 'race' for key 'username'"));
+
+        User update = new User();
+        update.setId(1);
+        update.setUsername("race");
+
+        assertThatThrownBy(() -> userService.update(update))
+                .isInstanceOf(CustomException.class)
+                .satisfies(e -> {
+                    CustomException ex = (CustomException) e;
+                    assertThat(ex.getCode()).isEqualTo(ErrorCode.BUSINESS_CONFLICT.code());
+                    assertThat(ex.getMsg()).contains("账号已存在");
+                });
+    }
+
+    @Test
+    void duplicateAdminUsernameOnUpdateBecomesBusinessConflict() {
+        when(adminMapper.selectById(1)).thenReturn(new Admin());
+        when(adminMapper.updateById(any(Admin.class)))
+                .thenThrow(new DuplicateKeyException("Duplicate entry 'race' for key 'username'"));
+
+        Admin update = new Admin();
+        update.setId(1);
+        update.setUsername("race");
+
+        assertThatThrownBy(() -> adminService.update(update))
+                .isInstanceOf(CustomException.class)
+                .satisfies(e -> {
+                    CustomException ex = (CustomException) e;
+                    assertThat(ex.getCode()).isEqualTo(ErrorCode.BUSINESS_CONFLICT.code());
+                    assertThat(ex.getMsg()).contains("账号已存在");
+                });
+    }
+
+    @Test
+    void duplicateCinemaUsernameOnUpdateBecomesBusinessConflict() {
+        when(cinemaMapper.selectById(1)).thenReturn(new Cinema());
+        when(cinemaMapper.updateById(any(Cinema.class)))
+                .thenThrow(new DuplicateKeyException("Duplicate entry 'race' for key 'username'"));
+
+        Cinema update = new Cinema();
+        update.setId(1);
+        update.setUsername("race");
+
+        assertThatThrownBy(() -> cinemaService.update(update))
+                .isInstanceOf(CustomException.class)
+                .satisfies(e -> {
+                    CustomException ex = (CustomException) e;
+                    assertThat(ex.getCode()).isEqualTo(ErrorCode.BUSINESS_CONFLICT.code());
+                    assertThat(ex.getMsg()).contains("账号已存在");
+                });
+    }
+
     private Account account(String username) {
         Account a = new Account();
         a.setUsername(username);

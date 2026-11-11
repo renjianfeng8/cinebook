@@ -2,13 +2,13 @@ package com.example.springboot.controller;
 
 import com.example.springboot.common.AuthContext;
 import com.example.springboot.common.BaseController;
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.common.Result;
 import com.example.springboot.dto.request.RoomRequest;
 import com.example.springboot.dto.response.RoomView;
 import com.example.springboot.entity.Room;
 import com.example.springboot.service.RoomService;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -72,7 +72,7 @@ public class RoomController extends BaseController<Room, RoomRequest, RoomView> 
                        @RequestParam(defaultValue = "10") Integer pageSize) {
         Room entity = toEntity(query);
         roomService.applyCinemaScope(entity, AuthContext.role(), AuthContext.userId());
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         return Result.success(toPageView(new PageInfo<>(roomService.selectAll(entity))));
     }
 

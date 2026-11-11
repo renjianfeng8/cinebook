@@ -14,6 +14,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Objects;
+
 /**
  * 管理员账号的登录与密码维护。管理员只由后台创建，没有自助注册入口；
  * 密码一律经 BCrypt 存储，更新资料时不允许改动密码与角色字段。
@@ -43,8 +46,9 @@ public class AdminService extends BaseService<Admin> {
         if (dbAdmin != null) {
             throw new CustomException(ErrorCode.BUSINESS_CONFLICT, "账号已存在,请更换别的账号");
         }
-        if (admin.getPassword() == null) {
-            admin.setPassword("admin123");
+        if (admin.getPassword() == null || admin.getPassword().isBlank()) {
+            // 不回退到公开可查的初始口令（Sonar java:S6437）：后台新增表单本就必填
+            throw new CustomException(ErrorCode.PARAM_INVALID, "请设置管理员的初始登录密码");
         }
         if (admin.getName() == null) {
             admin.setName(admin.getUsername());
@@ -65,7 +69,46 @@ public class AdminService extends BaseService<Admin> {
     public void update(Admin admin) {
         admin.setPassword(null);
         admin.setRole(null);
-        super.update(admin);
+        try {
+            super.update(admin);
+        } catch (DuplicateKeyException e) {
+            // 改名撞 username 唯一索引：与新增路径同一句提示，而不是漏成 500
+            throw new CustomException(ErrorCode.BUSINESS_CONFLICT, "账号已存在,请更换别的账号");
+        }
+    }
+
+    /** 删除管理员：禁止删当前登录账号，且至少保留一个管理员；锁全表行串行化并发删除 */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteGuarded(Integer id, Integer callerId) {
+        List<Integer> all = adminMapper.selectIdsForUpdate();
+        if (!all.contains(id)) {
+            throw new CustomException(ErrorCode.NOT_FOUND, "管理员不存在");
+        }
+        ensureAdminRemovable(all, List.of(id), callerId);
+        delete(id);
+    }
+
+    /** 批量删除管理员：与单删共用「不删自己、不删到 0 个」守卫 */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteBatchGuarded(List<Integer> ids, Integer callerId) {
+        List<Integer> targets = ids == null ? List.of()
+                : ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (targets.isEmpty()) {
+            throw new CustomException(ErrorCode.PARAM_INVALID, "请选择管理员");
+        }
+        List<Integer> all = adminMapper.selectIdsForUpdate();
+        ensureAdminRemovable(all, targets, callerId);
+        deleteBatch(targets);
+    }
+
+    private void ensureAdminRemovable(List<Integer> all, List<Integer> deleting, Integer callerId) {
+        if (deleting.contains(callerId)) {
+            throw new CustomException(ErrorCode.BUSINESS_CONFLICT, "不能删除当前登录的管理员账号");
+        }
+        long existing = deleting.stream().filter(all::contains).count();
+        if (all.size() - existing < 1) {
+            throw new CustomException(ErrorCode.BUSINESS_CONFLICT, "至少保留一个管理员账号");
+        }
     }
 
     public Admin login(Account account) {

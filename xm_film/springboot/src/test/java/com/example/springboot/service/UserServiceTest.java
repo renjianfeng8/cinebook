@@ -31,6 +31,9 @@ class UserServiceTest {
     @Mock
     private UserMapper userMapper;
 
+    @Mock
+    private OrderedService orderedService;
+
     @InjectMocks
     private UserService userService;
 
@@ -104,6 +107,28 @@ class UserServiceTest {
 
         assertThrows(CustomException.class, () -> userService.register(account));
         verify(userMapper, never()).insert(any());
+    }
+
+    @Test
+    void deleteWithLedgerRowsIsRejected() {
+        when(orderedService.countByUserId(1)).thenReturn(0);
+        when(userMapper.countLedgerReferences(1)).thenReturn(2);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.deleteScoped(1, RoleEnum.ADMIN.name(), 99));
+
+        assertTrue(ex.getMsg().contains("资金流水"));
+        verify(userMapper, never()).deleteById(1);
+    }
+
+    @Test
+    void deleteWithoutReferencesSucceeds() {
+        when(orderedService.countByUserId(1)).thenReturn(0);
+        when(userMapper.countLedgerReferences(1)).thenReturn(0);
+
+        userService.deleteScoped(1, RoleEnum.ADMIN.name(), 99);
+
+        verify(userMapper).deleteById(1);
     }
 
     @Test

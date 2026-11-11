@@ -64,7 +64,7 @@ public abstract class BaseController<T extends Identifiable, R, V> {
     public Result<PageInfo<V>> page(R query,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         return Result.success(toPageView(new PageInfo<>(service.selectAll(toEntity(query)))));
     }
 

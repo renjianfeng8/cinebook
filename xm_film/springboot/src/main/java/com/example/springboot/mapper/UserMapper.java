@@ -22,6 +22,12 @@ public interface UserMapper extends BaseMapper<User> {
     /** 大盘：注册用户总数 */
     int countAll();
 
+    /**
+     * 删除用户前的资金类外键检查：fund_flow / recharge_order 的 user_id 都是 RESTRICT。
+     * 只看 ordered 会漏掉「只充值过、没下过单」的用户，DELETE 继而撞外键变成通用 409。
+     */
+    int countLedgerReferences(Integer id);
+
     /* 账户余额：余额不挂 User 实体，避免 selectAll 的 SELECT * 把他人余额带出去 */
 
     /** 取余额并加行锁，供「读余额 → 变更 → 记流水」在同一事务内串行化 */

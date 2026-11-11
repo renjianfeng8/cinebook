@@ -2,6 +2,7 @@ package com.example.springboot.controller;
 
 import com.example.springboot.common.AuthContext;
 import com.example.springboot.common.BaseController;
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.common.Result;
 import com.example.springboot.common.enums.ErrorCode;
 import com.example.springboot.common.enums.PayResult;
@@ -15,7 +16,6 @@ import com.example.springboot.entity.Ordered;
 import com.example.springboot.exception.CustomException;
 import com.example.springboot.service.OrderedService;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -119,7 +119,7 @@ public class OrderedController extends BaseController<Ordered, OrderedRequest, O
                        @RequestParam(defaultValue = "10") Integer pageSize) {
         Ordered entity = toEntity(query);
         orderedService.applyScope(entity, AuthContext.role(), AuthContext.userId());
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         return Result.success(toPageView(new PageInfo<>(orderedService.selectAll(entity))));
     }
 

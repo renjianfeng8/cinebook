@@ -1,6 +1,7 @@
 package com.example.springboot.controller;
 
 import com.example.springboot.common.AuthContext;
+import com.example.springboot.common.PageLimit;
 import com.example.springboot.common.Result;
 import com.example.springboot.dto.request.RechargeCallbackRequest;
 import com.example.springboot.dto.request.RechargeCreateRequest;
@@ -9,7 +10,6 @@ import com.example.springboot.dto.response.RechargeOrderView;
 import com.example.springboot.entity.RechargeOrder;
 import com.example.springboot.service.RechargeService;
 import com.github.pagehelper.PageInfo;
-import com.github.pagehelper.page.PageMethod;
 import jakarta.validation.Valid;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,7 +46,7 @@ public class RechargeController {
     public Result<PageInfo<RechargeOrderView>> page(RechargeOrderRequest query,
                        @RequestParam(defaultValue = "1") Integer pageNum,
                        @RequestParam(defaultValue = "10") Integer pageSize) {
-        PageMethod.startPage(pageNum, pageSize);
+        PageLimit.startPage(pageNum, pageSize);
         List<RechargeOrder> list = rechargeService.selectScoped(toEntity(query), AuthContext.role(), AuthContext.userId());
         PageInfo<RechargeOrder> src = new PageInfo<>(list);
         PageInfo<RechargeOrderView> dst = new PageInfo<>();

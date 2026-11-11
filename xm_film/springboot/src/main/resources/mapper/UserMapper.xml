@@ -29,6 +29,12 @@
         SELECT * FROM user WHERE id = #{id}
     </select>
 
+    <!-- 删除守卫：两张资金表的 user_id 外键都是 RESTRICT，必须一起数 -->
+    <select id="countLedgerReferences" parameterType="java.lang.Integer" resultType="int">
+        SELECT (SELECT COUNT(*) FROM fund_flow WHERE user_id = #{id})
+             + (SELECT COUNT(*) FROM recharge_order WHERE user_id = #{id})
+    </select>
+
     <!-- 插入操作 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" parameterType="com.example.springboot.entity.User">
         INSERT INTO user (username, password, role, name, avatar, phone)
